@@ -46,7 +46,7 @@ function sanitizeSettings(raw = {}) {
 io.on('connection', (socket) => {
   console.log(`[connect]    ${socket.id}`);
 
-  socket.on('create-room', ({ name, settings }) => {
+  socket.on('create-room', ({ name, settings, role }) => {
     let roomCode;
     do { roomCode = generateRoomCode(); } while (rooms[roomCode]);
 
@@ -66,6 +66,7 @@ io.on('connection', (socket) => {
       card: null,
       isAdmin: true,
       isSpectator: false,
+      role: ['dev','qa'].includes(role) ? role : 'dev',
     };
 
     socket.join(roomCode);
@@ -75,7 +76,7 @@ io.on('connection', (socket) => {
     console.log(`[create]     ${socket.id} created ${roomCode}`);
   });
 
-  socket.on('join-room', ({ name, roomCode, isSpectator }) => {
+  socket.on('join-room', ({ name, roomCode, isSpectator, role }) => {
     const code = String(roomCode).toUpperCase().trim();
     const room = rooms[code];
     if (!room) { socket.emit('error-msg', 'Room not found. Check the code and try again.'); return; }
@@ -86,6 +87,7 @@ io.on('connection', (socket) => {
       card: null,
       isAdmin: false,
       isSpectator: Boolean(isSpectator),
+      role: ['dev','qa'].includes(role) ? role : 'dev',
     };
 
     socket.join(code);
@@ -170,7 +172,7 @@ io.on('connection', (socket) => {
     if (!room) return;
     const t = String(title).trim().slice(0, 200);
     if (!t) return;
-    const issue = { id: generateId(), title: t, estimate: null };
+    const issue = { id: generateId(), title: t, devEstimate: null, qaEstimate: null };
     room.issues.push(issue);
     if (!room.activeIssueId) room.activeIssueId = issue.id;
     io.to(socket.roomCode).emit('room-update', room);
@@ -199,14 +201,26 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('save-issue-estimate', ({ id, estimate }) => {
+  socket.on('save-team-estimate', ({ id, team, estimate }) => {
     const room = rooms[socket.roomCode];
     if (!room) return;
     const issue = room.issues.find(i => i.id === id);
-    if (issue) {
-      issue.estimate = String(estimate).slice(0, 20);
+    if (issue && ['dev','qa'].includes(team)) {
+      issue[team === 'dev' ? 'devEstimate' : 'qaEstimate'] = String(estimate).slice(0, 20);
       io.to(socket.roomCode).emit('room-update', room);
     }
+  });
+
+  socket.on('transfer-host', ({ toId }) => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+    const from = room.players[socket.id];
+    if (!from?.isAdmin) return;
+    const to = room.players[toId];
+    if (!to) return;
+    from.isAdmin = false;
+    to.isAdmin = true;
+    io.to(socket.roomCode).emit('room-update', room);
   });
 
   // ── Disconnect ─────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Planning Poker</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,6 +21,14 @@
       <div class="input-group">
         <label for="inp-name">Your name</label>
         <input id="inp-name" type="text" placeholder="e.g. Alex" maxlength="20" autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label for="sel-role">Your role</label>
+        <select id="sel-role" class="select-input">
+          <option value="dev">Dev</option>
+          <option value="qa">QA</option>
+        </select>
       </div>
 
       <div class="tabs">
@@ -119,22 +128,109 @@
 
       <div class="header-right">
         <button id="btn-issues-toggle" class="btn-ghost">Issues</button>
+        <button id="btn-transfer-host" class="btn-ghost hidden">Transfer Host</button>
         <button id="btn-reveal"    class="btn-reveal hidden">Reveal Cards</button>
         <button id="btn-new-round" class="btn-new-round hidden">New Round</button>
       </div>
     </header>
 
     <div class="game-body">
-      <!-- Table area -->
-      <div class="table-area" id="table-area">
-        <div class="poker-table" id="poker-table">
-          <div class="table-surface">
-            <div id="table-center-content">
-              <span class="table-waiting">Waiting for votes…</span>
+      <!-- Two-team tables container -->
+      <div class="tables-container" id="tables-container">
+
+        <!-- Dev Team -->
+        <div class="team-area" id="dev-area">
+          <div class="team-label dev-label">👨‍💻 Dev</div>
+          <div class="poker-table" id="dev-poker-table">
+            <div class="table-surface">
+              <div class="table-center-content" id="dev-center-content">
+                <span class="table-waiting">Waiting for votes…</span>
+              </div>
+            </div>
+            <!-- Dev Dealer (Danan) -->
+            <div class="dealer" id="dev-dealer">
+              <svg width="80" height="160" viewBox="0 0 80 160" overflow="visible" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <clipPath id="danan-face-clip">
+                    <circle cx="40" cy="36" r="31"/>
+                  </clipPath>
+                </defs>
+                <polygon points="14,76 24,76 -14,118 -24,118" fill="#f0f0f0" stroke="#ddd" stroke-width="0.5"/>
+                <polygon points="56,76 66,76 104,118 94,118" fill="#f0f0f0" stroke="#ddd" stroke-width="0.5"/>
+                <rect x="18" y="67" width="44" height="93" rx="10" fill="white"/>
+                <polygon points="18,67 36,67 40,88 36,160 18,160" fill="#1a1a1a"/>
+                <polygon points="62,67 44,67 40,88 44,160 62,160" fill="#1a1a1a"/>
+                <polygon points="34,67 41,67 35,75" fill="white"/>
+                <polygon points="46,67 39,67 45,75" fill="white"/>
+                <polygon points="24,71 35,67 35,76" fill="#0d0d0d"/>
+                <polygon points="56,71 45,67 45,76" fill="#0d0d0d"/>
+                <rect x="35" y="67" width="10" height="8" rx="2" fill="#222"/>
+                <circle cx="40" cy="92" r="2" fill="#bbb"/>
+                <circle cx="40" cy="104" r="2" fill="#bbb"/>
+                <circle cx="40" cy="116" r="2" fill="#bbb"/>
+                <image href="DananHead.png" x="9" y="5" width="62" height="62" clip-path="url(#danan-face-clip)" preserveAspectRatio="xMidYMid slice"/>
+              </svg>
+              <div class="dlr-label">Dealer</div>
+            </div>
+            <div class="dealer-hands" id="dev-dealer-hands">
+              <svg width="80" height="160" viewBox="0 0 80 160" overflow="visible" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="-16,112 -6,112 -10,117 -20,117" fill="#f0f0f0" stroke="none"/>
+                <polygon points="86,112 96,112 100,117 90,117" fill="#f0f0f0" stroke="none"/>
+                <polygon points="-23,117 -7,117 -11,122 -27,122" fill="#f5b090"/>
+                <polygon points="87,117 103,117 107,122 91,122" fill="#f5b090"/>
+              </svg>
             </div>
           </div>
+          <div class="players-layer" id="dev-players-layer"></div>
         </div>
-        <div id="players-layer"></div>
+
+        <!-- QA Team -->
+        <div class="team-area" id="qa-area">
+          <div class="team-label qa-label">🧪 QA</div>
+          <div class="poker-table" id="qa-poker-table">
+            <div class="table-surface">
+              <div class="table-center-content" id="qa-center-content">
+                <span class="table-waiting">Waiting for votes…</span>
+              </div>
+            </div>
+            <!-- QA Dealer (Sergio) -->
+            <div class="dealer" id="qa-dealer">
+              <svg width="80" height="160" viewBox="0 0 80 160" overflow="visible" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <clipPath id="sergio-face-clip">
+                    <circle cx="40" cy="36" r="31"/>
+                  </clipPath>
+                </defs>
+                <polygon points="14,76 24,76 -14,118 -24,118" fill="#f0f0f0" stroke="#ddd" stroke-width="0.5"/>
+                <polygon points="56,76 66,76 104,118 94,118" fill="#f0f0f0" stroke="#ddd" stroke-width="0.5"/>
+                <rect x="18" y="67" width="44" height="93" rx="10" fill="white"/>
+                <polygon points="18,67 36,67 40,88 36,160 18,160" fill="#1a1a1a"/>
+                <polygon points="62,67 44,67 40,88 44,160 62,160" fill="#1a1a1a"/>
+                <polygon points="34,67 41,67 35,75" fill="white"/>
+                <polygon points="46,67 39,67 45,75" fill="white"/>
+                <polygon points="24,71 35,67 35,76" fill="#0d0d0d"/>
+                <polygon points="56,71 45,67 45,76" fill="#0d0d0d"/>
+                <rect x="35" y="67" width="10" height="8" rx="2" fill="#222"/>
+                <circle cx="40" cy="92" r="2" fill="#bbb"/>
+                <circle cx="40" cy="104" r="2" fill="#bbb"/>
+                <circle cx="40" cy="116" r="2" fill="#bbb"/>
+                <image href="SergioHead.png" x="9" y="5" width="62" height="62" clip-path="url(#sergio-face-clip)" preserveAspectRatio="xMidYMid slice"/>
+              </svg>
+              <div class="dlr-label">Dealer</div>
+            </div>
+            <div class="dealer-hands" id="qa-dealer-hands">
+              <svg width="80" height="160" viewBox="0 0 80 160" overflow="visible" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="-16,112 -6,112 -10,117 -20,117" fill="#f0f0f0" stroke="none"/>
+                <polygon points="86,112 96,112 100,117 90,117" fill="#f0f0f0" stroke="none"/>
+                <polygon points="-23,117 -7,117 -11,122 -27,122" fill="#f5b090"/>
+                <polygon points="87,117 103,117 107,122 91,122" fill="#f5b090"/>
+              </svg>
+            </div>
+          </div>
+          <div class="players-layer" id="qa-players-layer"></div>
+        </div>
+
+        <!-- Shared countdown overlay -->
         <div id="countdown-overlay" class="countdown-overlay hidden">
           <span id="countdown-number"></span>
         </div>
@@ -165,6 +261,18 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- Transfer Host Modal -->
+  <div id="transfer-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">Transfer Host</span>
+        <button id="btn-transfer-cancel" class="btn-icon">✕</button>
+      </div>
+      <p class="modal-hint">Select a player to become the new host:</p>
+      <ul id="transfer-player-list" class="transfer-list"></ul>
+    </div>
   </div>
 
   <!-- Toast container -->

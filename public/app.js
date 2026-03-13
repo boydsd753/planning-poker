@@ -18,6 +18,7 @@ const inpRoomCode      = $('inp-room-code');
 const inpGameName      = $('inp-game-name');
 const selDeck          = $('sel-deck');
 const selWhoReveal     = $('sel-who-reveal');
+const selRole          = $('sel-role');
 const togAutoReveal    = $('tog-auto-reveal');
 const togShowAvg       = $('tog-show-avg');
 const togCountdown     = $('tog-countdown');
@@ -25,6 +26,10 @@ const togSpectator     = $('tog-spectator');
 const btnCreate        = $('btn-create');
 const btnJoin          = $('btn-join');
 const btnCopyLink      = $('btn-copy-link');
+const btnTransferHost  = $('btn-transfer-host');
+const transferModal    = $('transfer-modal');
+const transferList     = $('transfer-player-list');
+const btnTransferCancel = $('btn-transfer-cancel');
 const btnReveal        = $('btn-reveal');
 const btnNewRound      = $('btn-new-round');
 const btnIssuesToggle  = $('btn-issues-toggle');
@@ -36,12 +41,16 @@ const btnAddIssue      = $('btn-add-issue');
 const inpIssue         = $('inp-issue');
 const roomCodeDisplay  = $('room-code-display');
 const gameNameDisplay  = $('game-name-display');
-const tableCenterEl    = $('table-center-content');
-const playersLayer     = $('players-layer');
+const devCenterEl      = $('dev-center-content');
+const qaCenterEl       = $('qa-center-content');
+const devPlayersLayer  = $('dev-players-layer');
+const qaPlayersLayer   = $('qa-players-layer');
+const devArea          = $('dev-area');
+const qaArea           = $('qa-area');
+const devPokerTable    = $('dev-poker-table');
+const qaPokerTable     = $('qa-poker-table');
 const cardsRow         = $('cards-row');
 const landingError     = $('landing-error');
-const tableArea        = $('table-area');
-const pokerTable       = $('poker-table');
 const voteTally        = $('vote-tally');
 const countdownOverlay = $('countdown-overlay');
 const countdownNumber  = $('countdown-number');
@@ -58,6 +67,7 @@ let myId        = null;
 let myRoom      = null;
 let currentRoom = null;
 let wasRevealed = false;
+let wasAdmin    = false;
 let prevPlayerIds = [];
 let timerInterval = null;
 
@@ -99,6 +109,10 @@ socket.on('room-update', (room) => {
   const justRevealed = room.revealed && !wasRevealed;
   wasRevealed = room.revealed;
 
+  const me = Object.values(room.players).find(p => p.id === myId);
+  if (me?.isAdmin && !wasAdmin && currentRoom) showToast('You are now the host ★', 'host');
+  wasAdmin = me?.isAdmin || false;
+
   // Toast notifications for join/leave
   const newIds = Object.keys(room.players);
   if (currentRoom) {
@@ -114,7 +128,6 @@ socket.on('room-update', (room) => {
   prevPlayerIds = newIds;
   currentRoom = room;
 
-  // Update timer display
   syncTimer(room.timer);
 
   if (justRevealed && room.settings?.countdown) {
@@ -149,7 +162,7 @@ btnCreate.addEventListener('click', () => {
   const name = inpName.value.trim();
   if (!name) { landingError.textContent = 'Please enter your name.'; return; }
   landingError.textContent = '';
-  socket.emit('create-room', { name, settings: getSettings() });
+  socket.emit('create-room', { name, settings: getSettings(), role: selRole.value });
 });
 
 btnJoin.addEventListener('click', () => {
@@ -159,7 +172,7 @@ btnJoin.addEventListener('click', () => {
   if (!name) { landingError.textContent = 'Please enter your name.'; return; }
   if (!code) { landingError.textContent = 'Please enter a room code.'; return; }
   landingError.textContent = '';
-  socket.emit('join-room', { name, roomCode: code, isSpectator });
+  socket.emit('join-room', { name, roomCode: code, isSpectator, role: selRole.value });
 });
 
 inpName.addEventListener('keydown', e => {
@@ -179,6 +192,25 @@ btnCopyLink.addEventListener('click', () => {
     setTimeout(() => { btnCopyLink.textContent = 'Copy Link'; btnCopyLink.classList.remove('copied'); }, 2000);
   });
 });
+
+btnTransferHost.addEventListener('click', () => {
+  if (!currentRoom) return;
+  const players = Object.values(currentRoom.players).filter(p => p.id !== myId);
+  transferList.innerHTML = '';
+  players.forEach(p => {
+    const li = document.createElement('li');
+    li.className = 'transfer-item';
+    li.innerHTML = `<div class="transfer-item-avatar">${getInitials(p.name)}</div><span>${p.name}${p.isSpectator ? ' 👁' : ''} <small style="color:var(--muted)">(${p.role})</small></span>`;
+    li.addEventListener('click', () => {
+      socket.emit('transfer-host', { toId: p.id });
+      transferModal.classList.add('hidden');
+    });
+    transferList.appendChild(li);
+  });
+  transferModal.classList.remove('hidden');
+});
+btnTransferCancel.addEventListener('click', () => transferModal.classList.add('hidden'));
+transferModal.addEventListener('click', e => { if (e.target === transferModal) transferModal.classList.add('hidden'); });
 
 btnReveal.addEventListener('click', () => socket.emit('reveal-cards'));
 btnNewRound.addEventListener('click', () => { wasRevealed = false; socket.emit('new-round'); });
@@ -231,7 +263,12 @@ function formatMs(ms) {
 
 // Resize
 window.addEventListener('resize', () => {
-  if (currentRoom) { sizeTable(); renderPlayers(Object.values(currentRoom.players), currentRoom.revealed); }
+  if (currentRoom) {
+    const players = Object.values(currentRoom.players);
+    sizeTables();
+    renderTeamPlayers(players.filter(p => p.role === 'dev'), currentRoom.revealed, false, 'dev');
+    renderTeamPlayers(players.filter(p => p.role === 'qa'),  currentRoom.revealed, false, 'qa');
+  }
 });
 
 // Countdown
@@ -278,6 +315,8 @@ function render(room, animateFlip = false) {
 
   gameNameDisplay.textContent = s.gameName || '';
 
+  btnTransferHost.classList.toggle('hidden', !isAdmin);
+
   if (canAct) {
     btnReveal.classList.toggle('hidden', room.revealed);
     btnNewRound.classList.toggle('hidden', !room.revealed);
@@ -286,15 +325,30 @@ function render(room, animateFlip = false) {
     btnNewRound.classList.add('hidden');
   }
 
-  const voters = players.filter(p => !p.isSpectator);
-  const voted  = voters.filter(p => p.card !== null).length;
-  voteTally.textContent = room.revealed
-    ? 'Cards revealed'
-    : voters.length ? `${voted} / ${voters.length} voted` : '';
+  // Vote tally — per team
+  const devVoters = players.filter(p => !p.isSpectator && p.role === 'dev');
+  const qaVoters  = players.filter(p => !p.isSpectator && p.role === 'qa');
+  const devVoted  = devVoters.filter(p => p.card !== null).length;
+  const qaVoted   = qaVoters.filter(p => p.card !== null).length;
 
-  sizeTable();
-  renderTableCenter(players, room.revealed, s, room);
-  renderPlayers(players, room.revealed, animateFlip);
+  if (room.revealed) {
+    voteTally.textContent = 'Cards revealed';
+  } else {
+    const parts = [];
+    if (devVoters.length) parts.push(`Dev ${devVoted}/${devVoters.length}`);
+    if (qaVoters.length)  parts.push(`QA ${qaVoted}/${qaVoters.length}`);
+    voteTally.textContent = parts.join(' · ');
+  }
+
+  sizeTables();
+
+  const devPlayers = players.filter(p => p.role === 'dev');
+  const qaPlayers  = players.filter(p => p.role === 'qa');
+
+  renderTableCenter(devPlayers, room.revealed, s, room, 'dev');
+  renderTableCenter(qaPlayers,  room.revealed, s, room, 'qa');
+  renderTeamPlayers(devPlayers, room.revealed, animateFlip, 'dev');
+  renderTeamPlayers(qaPlayers,  room.revealed, animateFlip, 'qa');
   renderIssues(room.issues || [], room.activeIssueId);
 
   // Picker vs results
@@ -309,11 +363,13 @@ function render(room, animateFlip = false) {
   }
 }
 
-function sizeTable() {
-  const aw = tableArea.offsetWidth;
-  const ah = tableArea.offsetHeight;
-  pokerTable.style.width  = `${Math.min(aw * 0.60, 580)}px`;
-  pokerTable.style.height = `${Math.min(ah * 0.55, 320)}px`;
+function sizeTables() {
+  [['dev', devArea, devPokerTable], ['qa', qaArea, qaPokerTable]].forEach(([, area, table]) => {
+    const aw = area.offsetWidth;
+    const ah = area.offsetHeight;
+    table.style.width  = `${Math.min(aw * 0.58, 380)}px`;
+    table.style.height = `${Math.min(ah * 0.90, 700)}px`;
+  });
 }
 
 function renderCardPicker(revealed, me, deckKey) {
@@ -330,38 +386,56 @@ function renderCardPicker(revealed, me, deckKey) {
   });
 }
 
-function renderPlayers(players, revealed, animateFlip = false) {
-  playersLayer.innerHTML = '';
-  if (!players.length) return;
+// Distribute N players over a 300° arc (leaving 60° gap at top for dealer)
+function teamAngle(i, N) {
+  if (N <= 1) return Math.PI / 2; // single player: bottom
+  const ARC = (5 / 6) * 2 * Math.PI; // 300°
+  return Math.PI / 2 - ARC / 2 + (i / (N - 1)) * ARC;
+}
 
-  const aw = tableArea.offsetWidth;
-  const ah = tableArea.offsetHeight;
-  const cx = aw / 2, cy = ah / 2;
-  const rx = Math.min(aw * 0.43, 310);
-  const ry = Math.min(ah * 0.43, 195);
+function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
+  const layer = team === 'dev' ? devPlayersLayer : qaPlayersLayer;
+  const area  = team === 'dev' ? devArea : qaArea;
+  layer.innerHTML = '';
+  if (!teamPlayers.length) return;
 
-  const myIdx  = players.findIndex(p => p.id === myId);
-  const rotated = myIdx >= 0 ? [...players.slice(myIdx), ...players.slice(0, myIdx)] : players;
+  const aw = area.offsetWidth;
+  const ah = area.offsetHeight;
+  const cx = aw / 2;
+  const cy = ah / 2;
+  const rx = Math.min(aw * 0.38, 230);
+  const ry = Math.min(ah * 0.47, 320);
 
-  rotated.forEach((player, i) => {
-    const angle = Math.PI / 2 + (i / rotated.length) * 2 * Math.PI;
+  // Put "me" near the middle of the arc (bottom position)
+  const myIdx = teamPlayers.findIndex(p => p.id === myId);
+  let ordered = [...teamPlayers];
+  if (myIdx >= 0) {
+    const mid = Math.floor((teamPlayers.length - 1) / 2);
+    ordered.splice(myIdx, 1);
+    ordered.splice(mid, 0, teamPlayers[myIdx]);
+  }
+
+  const N = ordered.length;
+  const scale = N <= 9 ? 1.0 : Math.max(0.55, 1.0 - (N - 9) * 0.05);
+
+  ordered.forEach((player, i) => {
+    const angle = teamAngle(i, N);
     const x = cx + rx * Math.cos(angle);
     const y = cy + ry * Math.sin(angle);
-    const isMe = player.id === myId;
+    const isMe    = player.id === myId;
     const hasVoted = player.card !== null;
-    const isSpec = player.isSpectator;
+    const isSpec  = player.isSpectator;
 
     const seat = document.createElement('div');
     seat.className  = 'player-seat';
     seat.style.left = `${x}px`;
     seat.style.top  = `${y}px`;
+    seat.style.transform = `translate(-50%, -50%) scale(${scale})`;
 
-    // Card (spectators get empty always)
     const wrap  = document.createElement('div');
     wrap.className = 'player-card-wrap';
     const inner = document.createElement('div');
     inner.className = 'player-card-inner';
-    // When animating a fresh reveal, DON'T add flipped yet — we'll stagger it below
     if (revealed && hasVoted && !isSpec && !animateFlip) inner.classList.add('flipped');
 
     const back = document.createElement('div');
@@ -373,7 +447,7 @@ function renderPlayers(players, revealed, animateFlip = false) {
     front.className = 'card-face card-front';
     if (revealed && hasVoted && !isSpec) {
       const v = player.card;
-      front.innerHTML = `<span class="cv-corner">${v}</span><span class="cv-center">${v}</span><span class="cv-corner-bot">${v}</span>`;
+      front.innerHTML = `<span class="cv-center">${v}</span>`;
     }
 
     inner.appendChild(back);
@@ -397,43 +471,42 @@ function renderPlayers(players, revealed, animateFlip = false) {
     seat.appendChild(wrap);
     seat.appendChild(avatar);
     seat.appendChild(nameEl);
-    playersLayer.appendChild(seat);
+    layer.appendChild(seat);
 
-    // Staggered flip: trigger AFTER element is in DOM so the CSS transition fires
     if (animateFlip && revealed && hasVoted && !isSpec) {
       setTimeout(() => inner.classList.add('flipped'), i * 140);
     }
   });
 }
 
-function renderTableCenter(players, revealed, settings, room) {
-  const voters = players.filter(p => !p.isSpectator);
+function renderTableCenter(teamPlayers, revealed, settings, room, team) {
+  const el = team === 'dev' ? devCenterEl : qaCenterEl;
+  const teamLabel = team === 'dev' ? 'Dev' : 'QA';
+  const voters = teamPlayers.filter(p => !p.isSpectator);
+
+  if (voters.length === 0) {
+    el.innerHTML = `
+      <div class="table-lonely">
+        <div class="table-lonely-emoji">👤</div>
+        <div class="table-lonely-text">No ${teamLabel} players</div>
+      </div>`;
+    return;
+  }
 
   if (!revealed) {
-    if (voters.length <= 1) {
-      tableCenterEl.innerHTML = `
-        <div class="table-lonely">
-          <div class="table-lonely-emoji">😴</div>
-          <div class="table-lonely-text">Feeling lonely?</div>
-          <div class="table-lonely-hint">Share the link to invite your team</div>
-        </div>`;
-      return;
-    }
-
-    // Show active issue title if one is set
     const activeIssue = room.issues?.find(i => i.id === room.activeIssueId);
     const voted  = voters.filter(p => p.card !== null).length;
     const status = `${voted} / ${voters.length} voted`;
 
     if (activeIssue) {
-      tableCenterEl.innerHTML = `
+      el.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;opacity:.5">Voting on</div>
-          <div style="font-size:12px;line-height:1.4;opacity:.9">${escHtml(activeIssue.title)}</div>
-          <div style="font-size:11px;opacity:.5;margin-top:2px">${status}</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;opacity:.5">Voting on</div>
+          <div style="font-size:11px;line-height:1.4;opacity:.9">${escHtml(activeIssue.title)}</div>
+          <div style="font-size:10px;opacity:.5;margin-top:2px">${status}</div>
         </div>`;
     } else {
-      tableCenterEl.innerHTML = `<span class="table-waiting">${status}</span>`;
+      el.innerHTML = `<span class="table-waiting">${status}</span>`;
     }
     return;
   }
@@ -444,7 +517,7 @@ function renderTableCenter(players, revealed, settings, room) {
     .filter(n => !isNaN(n));
 
   if (numericVotes.length === 0) {
-    tableCenterEl.innerHTML = `<div class="stats-wrap"><span class="stat-range">No numeric votes</span></div>`;
+    el.innerHTML = `<div class="stats-wrap"><span class="stat-range">No numeric votes</span></div>`;
     return;
   }
 
@@ -452,7 +525,7 @@ function renderTableCenter(players, revealed, settings, room) {
   const allSame  = allCards.length > 0 && allCards.every(c => c === allCards[0]);
 
   if (allSame) {
-    tableCenterEl.innerHTML = `
+    el.innerHTML = `
       <div class="stats-wrap">
         <span class="stat-consensus">🎉 Consensus!</span>
         <span class="stat-avg">${allCards[0]}</span>
@@ -469,7 +542,7 @@ function renderTableCenter(players, revealed, settings, room) {
     ? `<span class="stat-label">Average</span><span class="stat-avg">${avgStr}</span>`
     : '';
 
-  tableCenterEl.innerHTML = `
+  el.innerHTML = `
     <div class="stats-wrap">
       ${avgHtml}
       <span class="stat-range">Range: ${min} – ${max}</span>
@@ -477,7 +550,28 @@ function renderTableCenter(players, revealed, settings, room) {
 }
 
 function renderResults(players, settings, room) {
-  const voters   = players.filter(p => !p.isSpectator && p.card !== null);
+  const devPlayers = players.filter(p => p.role === 'dev');
+  const qaPlayers  = players.filter(p => p.role === 'qa');
+
+  const devHtml = buildTeamResults(devPlayers, settings, room, 'dev', '👨‍💻 Dev Team');
+  const qaHtml  = buildTeamResults(qaPlayers,  settings, room, 'qa',  '🧪 QA Team');
+
+  resultsContent.innerHTML = `<div class="results-teams"><div class="results-team">${devHtml}</div><div class="results-team">${qaHtml}</div></div>`;
+
+  resultsContent.querySelectorAll('.btn-save-estimate').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('save-team-estimate', { id: btn.dataset.id, team: btn.dataset.team, estimate: btn.dataset.est });
+    });
+  });
+}
+
+function buildTeamResults(teamPlayers, settings, room, team, label) {
+  const voters = teamPlayers.filter(p => !p.isSpectator && p.card !== null);
+
+  if (voters.length === 0) {
+    return `<div class="results-team-header">${label}</div><div class="results-no-votes">No votes</div>`;
+  }
+
   const numericVotes = voters
     .map(p => p.card === '½' ? 0.5 : Number(p.card))
     .filter(n => !isNaN(n));
@@ -500,29 +594,31 @@ function renderResults(players, settings, room) {
       statsHtml = `<div class="results-stats">${avgPart}<span class="results-range">Range: ${min} – ${max}</span></div>`;
     }
 
-    // Save to active issue
     const activeIssue = room.issues?.find(i => i.id === room.activeIssueId);
     if (activeIssue) {
       const estimateVal = allSame ? allCards[0] : avgStr;
-      if (activeIssue.estimate) {
-        saveHtml = `<div class="results-save-row"><span class="save-confirm">✓ Saved as ${activeIssue.estimate}</span></div>`;
+      const savedEst = team === 'dev' ? activeIssue.devEstimate : activeIssue.qaEstimate;
+      if (savedEst) {
+        saveHtml = `<div class="results-save-row"><span class="save-confirm">✓ Saved as ${savedEst}</span></div>`;
       } else {
+        const shortTitle = escHtml(activeIssue.title.slice(0, 28) + (activeIssue.title.length > 28 ? '…' : ''));
         saveHtml = `
           <div class="results-save-row">
-            <button class="btn-save-estimate" data-id="${activeIssue.id}" data-est="${estimateVal}">
-              Save ${estimateVal} to "${escHtml(activeIssue.title.slice(0, 30))}${activeIssue.title.length > 30 ? '…' : ''}"
+            <button class="btn-save-estimate" data-id="${activeIssue.id}" data-team="${team}" data-est="${estimateVal}">
+              Save ${estimateVal} to "${shortTitle}"
             </button>
           </div>`;
       }
     }
   }
 
-  // Group votes by value
   const groups = {};
   voters.forEach(p => {
     if (!groups[p.card]) groups[p.card] = [];
     groups[p.card].push(p.name);
   });
+
+  const maxCount = Math.max(...Object.values(groups).map(n => n.length));
 
   const votesHtml = Object.entries(groups)
     .sort(([a], [b]) => {
@@ -533,24 +629,25 @@ function renderResults(players, settings, room) {
     })
     .map(([val, names], _, arr) => {
       const isWinner = arr.length > 1 && names.length === Math.max(...arr.map(([, n]) => n.length));
+      const label = names.length === 1 ? '1 vote' : `${names.length} votes`;
+      const pct = Math.round((names.length / maxCount) * 100);
       return `
         <div class="vote-group">
+          <div class="vote-bar-wrap">
+            <div class="vote-bar-bg">
+              <div class="vote-bar-fill${isWinner ? ' winner' : ''}" style="height:${pct}%"></div>
+            </div>
+          </div>
           <div class="vote-card-mini${isWinner ? ' highlight' : ''}">${val}</div>
-          <div class="vote-names" title="${names.join(', ')}">${names.join(', ')}</div>
+          <div class="vote-names">${label}</div>
         </div>`;
     }).join('');
 
-  resultsContent.innerHTML = `
+  return `
+    <div class="results-team-header">${label}</div>
     ${statsHtml}
     <div class="results-votes">${votesHtml}</div>
     ${saveHtml}`;
-
-  // Wire save button
-  resultsContent.querySelectorAll('.btn-save-estimate').forEach(btn => {
-    btn.addEventListener('click', () => {
-      socket.emit('save-issue-estimate', { id: btn.dataset.id, estimate: btn.dataset.est });
-    });
-  });
 }
 
 function renderIssues(issues, activeId) {
@@ -562,9 +659,17 @@ function renderIssues(issues, activeId) {
   issues.forEach(issue => {
     const li = document.createElement('li');
     li.className = 'issue-item' + (issue.id === activeId ? ' active' : '');
+
+    let estHtml = '';
+    if (issue.devEstimate || issue.qaEstimate) {
+      const d = issue.devEstimate ? `<span class="issue-estimate dev-est">Dev: ${escHtml(issue.devEstimate)}</span>` : '';
+      const q = issue.qaEstimate  ? `<span class="issue-estimate qa-est">QA: ${escHtml(issue.qaEstimate)}</span>` : '';
+      estHtml = `<span class="issue-estimates">${d}${q}</span>`;
+    }
+
     li.innerHTML = `
       <span class="issue-title">${escHtml(issue.title)}</span>
-      ${issue.estimate ? `<span class="issue-estimate">${escHtml(issue.estimate)}</span>` : ''}
+      ${estHtml}
       <button class="issue-delete" title="Delete">✕</button>`;
     li.querySelector('.issue-title').addEventListener('click', () => {
       socket.emit('set-active-issue', { id: issue.id });

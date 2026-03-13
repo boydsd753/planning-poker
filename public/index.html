@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planning Poker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Landing ──────────────────────────────────────────────────────────── -->
+  <div id="screen-landing" class="screen active">
+    <div class="landing-box">
+      <div class="logo">
+        <div class="logo-icon">🃏</div>
+        <h1>Planning Poker</h1>
+        <p>Free &amp; real-time — no account needed</p>
+      </div>
+
+      <div class="input-group">
+        <label for="inp-name">Your name</label>
+        <input id="inp-name" type="text" placeholder="e.g. Alex" maxlength="20" autocomplete="off">
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="create">Create Room</button>
+        <button class="tab-btn" data-tab="join">Join Room</button>
+      </div>
+
+      <!-- CREATE -->
+      <div id="tab-create" class="tab-panel active">
+        <div class="input-group">
+          <label for="inp-game-name">Game name <span class="label-optional">(optional)</span></label>
+          <input id="inp-game-name" type="text" placeholder="e.g. Sprint 42 Planning" maxlength="60" autocomplete="off">
+        </div>
+        <div class="input-group">
+          <label for="sel-deck">Voting system</label>
+          <select id="sel-deck" class="select-input">
+            <option value="fibonacci">Fibonacci ( 0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, ?, ☕ )</option>
+            <option value="modified">Modified Fibonacci ( 0, 1, 2, 3, 5, 8, 13, 20, 40, 100, ?, ☕ )</option>
+            <option value="tshirt">T-Shirt Sizes ( XS, S, M, L, XL, XXL, ?, ☕ )</option>
+            <option value="powers2">Powers of 2 ( 0, 1, 2, 4, 8, 16, 32, 64, ?, ☕ )</option>
+            <option value="sequential">Sequential ( 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ?, ☕ )</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label for="sel-who-reveal">Who can reveal cards</label>
+          <select id="sel-who-reveal" class="select-input">
+            <option value="host">Host only</option>
+            <option value="all">All players</option>
+          </select>
+        </div>
+        <div class="divider"></div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Auto-reveal cards</span>
+            <span class="toggle-hint">Reveal automatically when everyone has voted.</span>
+          </div>
+          <button type="button" class="toggle-btn" id="tog-auto-reveal" aria-pressed="false"></button>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Show average in results</span>
+            <span class="toggle-hint">Display the average vote after cards are revealed.</span>
+          </div>
+          <button type="button" class="toggle-btn active" id="tog-show-avg" aria-pressed="true"></button>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Countdown before reveal</span>
+            <span class="toggle-hint">3-2-1 animation before cards flip.</span>
+          </div>
+          <button type="button" class="toggle-btn active" id="tog-countdown" aria-pressed="true"></button>
+        </div>
+        <button id="btn-create" class="btn-primary">Create Game</button>
+      </div>
+
+      <!-- JOIN -->
+      <div id="tab-join" class="tab-panel">
+        <input id="inp-room-code" type="text" placeholder="Room code (e.g. AB3X9Y)" maxlength="6" autocomplete="off" style="text-transform:uppercase">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Join as spectator</span>
+            <span class="toggle-hint">Watch the game without voting.</span>
+          </div>
+          <button type="button" class="toggle-btn" id="tog-spectator" aria-pressed="false"></button>
+        </div>
+        <button id="btn-join" class="btn-primary">Join Room</button>
+      </div>
+
+      <p id="landing-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- ── Game ─────────────────────────────────────────────────────────────── -->
+  <div id="screen-game" class="screen">
+
+    <header class="game-header">
+      <div class="header-left">
+        <div class="header-game-info">
+          <span id="game-name-display" class="game-name-display"></span>
+          <span class="room-label">Room <strong id="room-code-display">------</strong></span>
+        </div>
+        <button id="btn-copy-link" class="btn-ghost">Copy Link</button>
+      </div>
+
+      <div class="header-center">
+        <!-- Timer -->
+        <div class="timer-wrap" id="timer-wrap">
+          <span id="timer-display" class="timer-display">00:00</span>
+          <div class="timer-controls" id="timer-controls">
+            <button id="btn-timer-start"  class="timer-btn" title="Start">▶</button>
+            <button id="btn-timer-pause"  class="timer-btn hidden" title="Pause">⏸</button>
+            <button id="btn-timer-reset"  class="timer-btn" title="Reset">↺</button>
+          </div>
+        </div>
+        <span id="vote-tally" class="vote-tally"></span>
+      </div>
+
+      <div class="header-right">
+        <button id="btn-issues-toggle" class="btn-ghost">Issues</button>
+        <button id="btn-reveal"    class="btn-reveal hidden">Reveal Cards</button>
+        <button id="btn-new-round" class="btn-new-round hidden">New Round</button>
+      </div>
+    </header>
+
+    <div class="game-body">
+      <!-- Table area -->
+      <div class="table-area" id="table-area">
+        <div class="poker-table" id="poker-table">
+          <div class="table-surface">
+            <div id="table-center-content">
+              <span class="table-waiting">Waiting for votes…</span>
+            </div>
+          </div>
+        </div>
+        <div id="players-layer"></div>
+        <div id="countdown-overlay" class="countdown-overlay hidden">
+          <span id="countdown-number"></span>
+        </div>
+      </div>
+
+      <!-- Issues sidebar -->
+      <aside class="issues-sidebar" id="issues-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">Issues</span>
+          <button id="btn-sidebar-close" class="btn-icon" title="Close">✕</button>
+        </div>
+        <ul class="issue-list" id="issue-list"></ul>
+        <div class="add-issue-row">
+          <input id="inp-issue" type="text" placeholder="Add an issue…" maxlength="200" class="issue-input">
+          <button id="btn-add-issue" class="btn-add-issue">+</button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Bottom: card picker OR results -->
+    <div class="picker-area">
+      <div id="picker-panel">
+        <p class="picker-label">Your vote</p>
+        <div class="cards-row" id="cards-row"></div>
+      </div>
+      <div id="results-panel" class="hidden">
+        <div id="results-content"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toasts" class="toasts"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

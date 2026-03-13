@@ -1,0 +1,14 @@
+{
+  "name": "planning-poker",
+  "version": "1.0.0",
+  "description": "Free real-time planning poker for dev teams",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.4"
+  }
+}

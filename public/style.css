@@ -659,6 +659,33 @@ input[type=text]:focus, .select-input:focus { border-color: var(--primary); }
 .jira-label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .jira-select { font-size: 13px; }
 
+/* Searchable project dropdown */
+.search-select-wrap { position: relative; }
+.search-select-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  margin-top: 4px; max-height: 200px; overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  list-style: none; padding: 4px; margin: 4px 0 0;
+}
+.search-select-dropdown.hidden { display: none; }
+.proj-dd-item {
+  padding: 8px 10px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; color: var(--text);
+}
+.proj-dd-item:hover { background: var(--primary); color: white; }
+.proj-dd-empty { padding: 8px 10px; font-size: 13px; color: var(--muted); }
+
+/* Issue search inside results */
+.jira-issue-search-wrap { margin-bottom: 6px; }
+.jira-issue-search {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 13px; outline: none;
+}
+.jira-issue-search:focus { border-color: var(--primary); }
+
 /* ── Jira Estimate Panel ─────────────────────────────────────────────────── */
 .jira-estimate-panel {
   margin: 0 12px 4px;

@@ -286,17 +286,20 @@
         <button id="btn-jira-cancel" class="btn-icon">✕</button>
       </div>
 
-      <div class="jira-step" id="jira-step-board">
-        <label class="jira-label">Board</label>
-        <select id="sel-jira-board" class="select-input jira-select" disabled>
-          <option value="">Loading boards…</option>
-        </select>
+      <div class="jira-step" id="jira-step-project">
+        <label class="jira-label">Project</label>
+        <div class="search-select-wrap" id="project-search-wrap">
+          <input id="inp-jira-project" class="select-input jira-select" type="text" placeholder="Loading projects…" disabled autocomplete="off">
+          <ul id="project-dropdown" class="search-select-dropdown hidden"></ul>
+        </div>
       </div>
 
-      <div class="jira-step hidden" id="jira-step-sprint">
-        <label class="jira-label">Sprint / Backlog</label>
-        <select id="sel-jira-sprint" class="select-input jira-select" disabled>
-          <option value="">Select…</option>
+      <div class="jira-step hidden" id="jira-step-filter">
+        <label class="jira-label">Issues</label>
+        <select id="sel-jira-filter" class="select-input jira-select">
+          <option value="all">All open issues</option>
+          <option value="activeSprint">Active Sprint</option>
+          <option value="backlog">Backlog</option>
         </select>
       </div>
 

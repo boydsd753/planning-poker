@@ -16,6 +16,7 @@ app.use(express.json());
 const jiraSessions = {}; // sessionId → { accessToken, cloudId, domain }
 
 function httpRequest(hostname, authHeader, method, path, body) {
+  console.log(`[http] ${method} https://${hostname}${path}`);
   return new Promise((resolve, reject) => {
     const bodyStr = body ? JSON.stringify(body) : null;
     const headers = { Accept: 'application/json' };
@@ -47,14 +48,37 @@ function jiraPost(session, apiPath, body) {
   return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'POST', `/ex/jira/${session.cloudId}${apiPath}`, body);
 }
 
+async function refreshIfNeeded(session) {
+  // Refresh when within 5 minutes of expiry
+  if (Date.now() < session.expiresAt - 5 * 60 * 1000) return;
+  if (!session.refreshToken) throw new Error('No refresh token — user must re-link Jira.');
+  console.log('[jira oauth] access token expiring, refreshing…');
+  const tokenRes = await httpRequest('auth.atlassian.com', null, 'POST', '/oauth/token', {
+    grant_type:    'refresh_token',
+    client_id:     process.env.ATLASSIAN_CLIENT_ID,
+    client_secret: process.env.ATLASSIAN_CLIENT_SECRET,
+    refresh_token: session.refreshToken,
+  });
+  if (tokenRes.status !== 200) throw new Error('Token refresh failed — user must re-link Jira.');
+  const { access_token, refresh_token, expires_in } = JSON.parse(tokenRes.body);
+  session.accessToken  = access_token;
+  if (refresh_token) session.refreshToken = refresh_token; // Atlassian may rotate it
+  session.expiresAt    = Date.now() + (expires_in || 3600) * 1000;
+  console.log(`[jira oauth] token refreshed, next expiry in ${expires_in || 3600}s`);
+}
+
 function jiraRoute(method, route, handler) {
   app[method](route, async (req, res) => {
     const sessionId = req.headers['x-jira-session'];
     const session = jiraSessions[sessionId];
     console.log(`[jira route] ${method.toUpperCase()} ${route} sessionId=${sessionId?.slice(0,10)} found=${!!session}`);
     if (!session) return res.status(401).json({ error: 'Not authenticated with Jira.' });
-    try { await handler(req, res, session); }
-    catch (err) { res.status(500).json({ error: err.message }); }
+    try {
+      await refreshIfNeeded(session);
+      await handler(req, res, session);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 }
 
@@ -62,7 +86,7 @@ function jiraRoute(method, route, handler) {
 app.get('/auth/jira', (req, res) => {
   const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   jiraSessions[`state_${state}`] = { expires: Date.now() + 5 * 60 * 1000 };
-  const scopes = 'read:jira-work write:jira-work read:issue:jira write:issue:jira read:board-scope:jira-software read:sprint:jira-software';
+  const scopes = 'read:jira-work write:jira-work read:issue:jira write:issue:jira read:issue-details:jira offline_access';
   const redirectUri = `${process.env.APP_URL}/auth/jira/callback`;
   const url = `https://auth.atlassian.com/authorize?audience=api.atlassian.com`
     + `&client_id=${process.env.ATLASSIAN_CLIENT_ID}`
@@ -93,7 +117,7 @@ app.get('/auth/jira/callback', async (req, res) => {
       code, redirect_uri: redirectUri,
     });
     if (tokenRes.status !== 200) return fail('Token exchange failed.');
-    const { access_token } = JSON.parse(tokenRes.body);
+    const { access_token, refresh_token, expires_in } = JSON.parse(tokenRes.body);
 
     // Get their Jira cloud ID + domain
     const resourcesRes = await httpRequest('api.atlassian.com', `Bearer ${access_token}`, 'GET', '/oauth/token/accessible-resources', null);
@@ -110,7 +134,13 @@ app.get('/auth/jira/callback', async (req, res) => {
 
     // Store session
     const sessionId = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    jiraSessions[sessionId] = { accessToken: access_token, cloudId, domain };
+    jiraSessions[sessionId] = {
+      accessToken:  access_token,
+      refreshToken: refresh_token || null,
+      expiresAt:    Date.now() + (expires_in || 3600) * 1000,
+      cloudId,
+      domain,
+    };
 
     res.send(`<script>window.opener?.postMessage({jiraSession:${JSON.stringify(sessionId)},jiraDomain:${JSON.stringify(domain)}},location.origin);window.close();</script>`);
   } catch (err) {
@@ -119,29 +149,6 @@ app.get('/auth/jira/callback', async (req, res) => {
 });
 
 // ── Jira API proxy ──────────────────────────────────────────────────────────
-jiraRoute('get', '/api/jira/boards', async (req, res, session) => {
-  const { status, body } = await jiraFetch(session, '/rest/agile/1.0/board?maxResults=50');
-  console.log(`[jira boards] status=${status}`);
-  if (status !== 200) { console.log('[jira boards] body=', body); return res.status(status).json({ error: `Jira returned ${status}` }); }
-  const boards = (JSON.parse(body).values || []).map(b => ({
-    id: b.id, name: b.name, type: b.type,
-    project: b.location?.projectName || '',
-    projectKey: b.location?.projectKey || '',
-  }));
-  res.json({ boards });
-});
-
-jiraRoute('get', '/api/jira/sprints', async (req, res, session) => {
-  const boardId = req.query.boardId;
-  if (!boardId) return res.status(400).json({ error: 'boardId required' });
-  const { status, body } = await jiraFetch(session, `/rest/agile/1.0/board/${boardId}/sprint?state=active,future&maxResults=25`);
-  if (status === 410) return res.json({ sprints: [], kanban: true });
-  console.log(`[jira sprints] status=${status}`);
-  if (status !== 200) return res.status(status).json({ error: `Jira returned ${status}` });
-  const sprints = (JSON.parse(body).values || []).map(s => ({ id: s.id, name: s.name, state: s.state }));
-  res.json({ sprints });
-});
-
 jiraRoute('get', '/api/jira/projects', async (req, res, session) => {
   const { status, body } = await jiraFetch(session, '/rest/api/3/project?maxResults=50');
   console.log(`[jira projects] status=${status}`);
@@ -152,24 +159,22 @@ jiraRoute('get', '/api/jira/projects', async (req, res, session) => {
 
 jiraRoute('get', '/api/jira/issues', async (req, res, session) => {
   const maxResults = Math.min(Number(req.query.maxResults) || 100, 100);
-  const sprintId   = req.query.sprintId;
-  const boardId    = req.query.boardId;
-
   const projectKey = req.query.projectKey;
-
+  if (!projectKey) return res.status(400).json({ error: 'projectKey required' });
+  const filter = req.query.filter || 'all';
   let jql;
-  if (sprintId) {
-    jql = `sprint = ${sprintId} AND status not in (Done, Closed, Resolved) ORDER BY created DESC`;
-  } else if (projectKey) {
-    jql = `project = "${projectKey}" AND status not in (Done, Closed, Resolved) ORDER BY created DESC`;
+  if (filter === 'activeSprint') {
+    jql = `project = "${projectKey}" AND sprint in openSprints() AND status not in (Done, Closed, Resolved) ORDER BY created DESC`;
+  } else if (filter === 'backlog') {
+    jql = `project = "${projectKey}" AND (sprint is EMPTY OR sprint not in openSprints()) AND status not in (Done, Closed, Resolved) ORDER BY created DESC`;
   } else {
-    return res.status(400).json({ error: 'sprintId or projectKey required' });
+    jql = `project = "${projectKey}" AND status not in (Done, Closed, Resolved) ORDER BY created DESC`;
   }
 
-  const { status, body } = await jiraPost(session, '/rest/api/3/search', {
-    jql, fields: ['summary', 'status', 'issuetype'], maxResults,
-  });
-  console.log(`[jira issues] status=${status}`);
+  const searchBody = { jql, fields: ['summary', 'status', 'issuetype'], maxResults };
+  console.log(`[jira issues] POST /rest/api/3/search jql=${jql}`);
+  const { status, body } = await jiraPost(session, '/rest/api/3/search/jql', searchBody);
+  console.log(`[jira issues] status=${status} body=${body}`);
   if (status !== 200) { console.log('[jira issues] body=', body); return res.status(status).json({ error: `Jira returned ${status}`, detail: body }); }
   const parsed = JSON.parse(body);
   const issues = (parsed.issues || []).map(i => ({

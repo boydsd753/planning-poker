@@ -779,8 +779,8 @@ function renderIssues(issues, activeId) {
 }
 
 // ── Jira OAuth session ─────────────────────────────────────────────────────
-let jiraSession = sessionStorage.getItem('jiraSession') || null;
-let jiraDomain  = sessionStorage.getItem('jiraDomain')  || null;
+let jiraSession = localStorage.getItem('jiraSession') || null;
+let jiraDomain  = localStorage.getItem('jiraDomain')  || null;
 
 function jiraHeaders() {
   return { 'Content-Type': 'application/json', 'x-jira-session': jiraSession || '' };
@@ -797,8 +797,8 @@ btnLinkJira.addEventListener('click', () => {
   if (jiraSession) {
     // Already linked — click to unlink
     jiraSession = null; jiraDomain = null;
-    sessionStorage.removeItem('jiraSession');
-    sessionStorage.removeItem('jiraDomain');
+    localStorage.removeItem('jiraSession');
+    localStorage.removeItem('jiraDomain');
     updateJiraButton(true);
     showToast('Jira unlinked', 'info');
     return;
@@ -810,8 +810,8 @@ btnLinkJira.addEventListener('click', () => {
     if (e.data.jiraSession) {
       jiraSession = e.data.jiraSession;
       jiraDomain  = e.data.jiraDomain;
-      sessionStorage.setItem('jiraSession', jiraSession);
-      sessionStorage.setItem('jiraDomain',  jiraDomain);
+      localStorage.setItem('jiraSession', jiraSession);
+      localStorage.setItem('jiraDomain',  jiraDomain);
       updateJiraButton(true);
       showToast(`Jira linked: ${jiraDomain}`, 'join');
     } else if (e.data.jiraError) {
@@ -828,131 +828,124 @@ const btnJiraImport    = $('btn-jira-import');
 const btnJiraCancel    = $('btn-jira-cancel');
 const btnJiraFetch     = $('btn-jira-fetch');
 const jiraResults      = $('jira-results');
-const selJiraBoard  = $('sel-jira-board');
-const selJiraSprint = $('sel-jira-sprint');
-const stepSprint    = $('jira-step-sprint');
+const inpJiraProject   = $('inp-jira-project');
+const projectDropdown  = $('project-dropdown');
+const selJiraFilter    = $('sel-jira-filter');
+const stepFilter       = $('jira-step-filter');
+
+// Searchable project dropdown state
+let allProjects = [];
+let selectedProjectKey = '';
 
 async function jiraGet(url) {
-  const res = await fetch(url, { headers: { 'x-jira-session': jiraSession || '' } });
+  const res = await fetch(url, { headers: { 'x-jira-session': jiraSession || '' }, cache: 'no-store' });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
   return data;
 }
 
+function renderProjectDropdown(filter) {
+  const q = (filter || '').toLowerCase();
+  const filtered = allProjects.filter(p =>
+    p.key.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
+  );
+  projectDropdown.innerHTML = '';
+  if (!filtered.length) {
+    projectDropdown.innerHTML = '<li class="proj-dd-empty">No projects found</li>';
+  } else {
+    filtered.forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'proj-dd-item';
+      li.textContent = `${p.key} — ${p.name}`;
+      li.dataset.key = p.key;
+      li.dataset.name = p.name;
+      li.addEventListener('mousedown', e => {
+        e.preventDefault(); // prevent blur before click
+        selectProject(p.key, `${p.key} — ${p.name}`);
+      });
+      projectDropdown.appendChild(li);
+    });
+  }
+  projectDropdown.classList.remove('hidden');
+}
+
+function selectProject(key, label) {
+  selectedProjectKey = key;
+  inpJiraProject.value = label;
+  projectDropdown.classList.add('hidden');
+  stepFilter.classList.remove('hidden');
+  btnJiraFetch.disabled = false;
+  btnJiraFetch.click();
+}
+
+inpJiraProject.addEventListener('focus', () => {
+  if (allProjects.length) renderProjectDropdown(inpJiraProject.value);
+});
+
+inpJiraProject.addEventListener('input', () => {
+  selectedProjectKey = '';
+  stepFilter.classList.add('hidden');
+  btnJiraFetch.disabled = true;
+  jiraResults.classList.add('hidden');
+  renderProjectDropdown(inpJiraProject.value);
+});
+
+inpJiraProject.addEventListener('blur', () => {
+  setTimeout(() => projectDropdown.classList.add('hidden'), 150);
+});
+
 btnJiraImport.addEventListener('click', async () => {
   if (!jiraSession) { showToast('Link your Jira account first (top-right)', 'info'); return; }
   jiraResults.innerHTML = '';
   jiraResults.classList.add('hidden');
-  stepSprint.classList.add('hidden');
+  stepFilter.classList.add('hidden');
   btnJiraFetch.disabled = true;
-  selJiraBoard.innerHTML = '<option>Loading boards…</option>';
-  selJiraBoard.disabled = true;
+  allProjects = [];
+  selectedProjectKey = '';
+  inpJiraProject.value = '';
+  inpJiraProject.placeholder = 'Loading projects…';
+  inpJiraProject.disabled = true;
+  projectDropdown.classList.add('hidden');
   jiraModal.classList.remove('hidden');
 
   try {
-    const { boards } = await jiraGet('/api/jira/boards');
-    selJiraBoard.innerHTML = '<option value="">Select a board…</option>';
-    boards.forEach(b => {
-      const opt = document.createElement('option');
-      opt.dataset.projectKey = b.projectKey || '';
-      opt.value = b.id;
-      opt.textContent = b.project ? `${b.project} — ${b.name}` : b.name;
-      selJiraBoard.appendChild(opt);
-    });
-    selJiraBoard.disabled = false;
+    const { projects } = await jiraGet('/api/jira/projects');
+    allProjects = projects;
+    inpJiraProject.placeholder = 'Type to search projects…';
+    inpJiraProject.disabled = false;
+    inpJiraProject.focus();
+    renderProjectDropdown('');
   } catch (err) {
-    selJiraBoard.innerHTML = `<option>Error: ${escHtml(err.message)}</option>`;
+    inpJiraProject.placeholder = `Error: ${err.message}`;
   }
 });
 
-selJiraBoard.addEventListener('change', async () => {
-  const boardId = selJiraBoard.value;
-  stepSprint.classList.add('hidden');
-  btnJiraFetch.disabled = true;
-  if (!boardId) return;
-
-  stepSprint.classList.remove('hidden');
-  selJiraSprint.innerHTML = '<option>Loading…</option>';
-  selJiraSprint.disabled = true;
-
-  try {
-    const data = await jiraGet(`/api/jira/sprints?boardId=${encodeURIComponent(boardId)}`);
-    selJiraSprint.innerHTML = '';
-    const selectedOpt = selJiraBoard.options[selJiraBoard.selectedIndex];
-    const projectKey = selectedOpt?.dataset.projectKey || '';
-    const backlog = document.createElement('option');
-    backlog.value = `__backlog__:${projectKey}`;
-    backlog.textContent = 'Backlog';
-    selJiraSprint.appendChild(backlog);
-    if (!data.kanban && data.sprints?.length) {
-      data.sprints.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = `${s.name} [${s.state}]`;
-        selJiraSprint.appendChild(opt);
-      });
-    }
-    selJiraSprint.disabled = false;
-    btnJiraFetch.disabled = false;
-  } catch (err) {
-    selJiraSprint.innerHTML = `<option>Error: ${escHtml(err.message)}</option>`;
-  }
+selJiraFilter.addEventListener('change', () => {
+  if (selectedProjectKey) btnJiraFetch.click();
 });
 
 btnJiraCancel.addEventListener('click', () => jiraModal.classList.add('hidden'));
 jiraModal.addEventListener('click', e => { if (e.target === jiraModal) jiraModal.classList.add('hidden'); });
 
+// All fetched issues (for client-side search)
+let allFetchedIssues = [];
+
 btnJiraFetch.addEventListener('click', async () => {
-  const sprintVal = selJiraSprint.value;
-  if (!sprintVal) return;
+  const projectKey = selectedProjectKey;
+  if (!projectKey) return;
   btnJiraFetch.textContent = 'Fetching…';
   btnJiraFetch.disabled = true;
   jiraResults.innerHTML = '';
   jiraResults.classList.add('hidden');
+  allFetchedIssues = [];
 
-  const isBacklog  = sprintVal.startsWith('__backlog__:');
-  const projectKey = isBacklog ? sprintVal.split(':')[1] : null;
-  const sprintId   = isBacklog ? null : sprintVal;
-  const issueUrl   = isBacklog
-    ? `/api/jira/issues?projectKey=${encodeURIComponent(projectKey)}`
-    : `/api/jira/issues?sprintId=${encodeURIComponent(sprintId)}`;
+  const filter = selJiraFilter?.value || 'all';
+  const issueUrl = `/api/jira/issues?projectKey=${encodeURIComponent(projectKey)}&filter=${encodeURIComponent(filter)}`;
 
   try {
     const data = await jiraGet(issueUrl);
-
-    if (!data.issues.length) {
-      jiraResults.innerHTML = '<p class="jira-empty">No issues found in this sprint.</p>';
-      jiraResults.classList.remove('hidden');
-      return;
-    }
-
-    const hint = document.createElement('p');
-    hint.className = 'jira-hint';
-    hint.textContent = `${data.issues.length} issue${data.issues.length !== 1 ? 's' : ''} — click to add`;
-
-    const ul = document.createElement('ul');
-    ul.className = 'jira-issue-list';
-
-    data.issues.forEach(issue => {
-      const li = document.createElement('li');
-      li.className = 'jira-issue-item';
-      li.innerHTML = `
-        <span class="jira-key">${escHtml(issue.key)}</span>
-        <span class="jira-summary">${escHtml(issue.title.replace(issue.key + ': ', ''))}</span>
-        <span class="jira-status">${escHtml(issue.status)}</span>`;
-      li.addEventListener('click', () => {
-        socket.emit('add-issue', { title: issue.title, jiraKey: issue.key });
-        li.classList.add('jira-imported');
-        li.style.opacity = '0.45';
-        li.style.pointerEvents = 'none';
-        showToast(`Added: ${issue.key}`, 'info');
-      });
-      ul.appendChild(li);
-    });
-
-    jiraResults.appendChild(hint);
-    jiraResults.appendChild(ul);
-    jiraResults.classList.remove('hidden');
+    allFetchedIssues = data.issues || [];
+    renderIssueResults(allFetchedIssues);
   } catch (err) {
     jiraResults.innerHTML = `<p class="jira-error">${escHtml(err.message)}</p>`;
     jiraResults.classList.remove('hidden');
@@ -961,6 +954,78 @@ btnJiraFetch.addEventListener('click', async () => {
     btnJiraFetch.disabled = false;
   }
 });
+
+function renderIssueResults(issues) {
+  jiraResults.innerHTML = '';
+
+  if (!issues.length && !allFetchedIssues.length) {
+    jiraResults.innerHTML = '<p class="jira-empty">No issues found.</p>';
+    jiraResults.classList.remove('hidden');
+    return;
+  }
+
+  // Search input
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'jira-issue-search-wrap';
+  const searchInp = document.createElement('input');
+  searchInp.type = 'text';
+  searchInp.className = 'jira-issue-search';
+  searchInp.placeholder = 'Search issues…';
+  searchInp.autocomplete = 'off';
+  searchInp.addEventListener('input', () => {
+    const q = searchInp.value.toLowerCase();
+    const filtered = allFetchedIssues.filter(i =>
+      i.key.toLowerCase().includes(q) || i.title.toLowerCase().includes(q) || i.status.toLowerCase().includes(q)
+    );
+    renderIssueList(ul, filtered);
+    hint.textContent = buildHintText(filtered.length, allFetchedIssues.length);
+  });
+  searchWrap.appendChild(searchInp);
+
+  const hint = document.createElement('p');
+  hint.className = 'jira-hint';
+  hint.textContent = buildHintText(issues.length, allFetchedIssues.length);
+
+  const ul = document.createElement('ul');
+  ul.className = 'jira-issue-list';
+  renderIssueList(ul, issues);
+
+  jiraResults.appendChild(searchWrap);
+  jiraResults.appendChild(hint);
+  jiraResults.appendChild(ul);
+  jiraResults.classList.remove('hidden');
+
+  searchInp.focus();
+}
+
+function buildHintText(shown, total) {
+  if (shown === total) return `${total} issue${total !== 1 ? 's' : ''} — click to add`;
+  return `${shown} of ${total} issues — click to add`;
+}
+
+function renderIssueList(ul, issues) {
+  ul.innerHTML = '';
+  if (!issues.length) {
+    ul.innerHTML = '<li class="jira-empty" style="list-style:none;padding:8px 0">No matching issues</li>';
+    return;
+  }
+  issues.forEach(issue => {
+    const li = document.createElement('li');
+    li.className = 'jira-issue-item';
+    li.innerHTML = `
+      <span class="jira-key">${escHtml(issue.key)}</span>
+      <span class="jira-summary">${escHtml(issue.title.replace(issue.key + ': ', ''))}</span>
+      <span class="jira-status">${escHtml(issue.status)}</span>`;
+    li.addEventListener('click', () => {
+      socket.emit('add-issue', { title: issue.title, jiraKey: issue.key });
+      li.classList.add('jira-imported');
+      li.style.opacity = '0.45';
+      li.style.pointerEvents = 'none';
+      showToast(`Added: ${issue.key}`, 'info');
+    });
+    ul.appendChild(li);
+  });
+}
 
 // Helpers
 function showScreen(name) {

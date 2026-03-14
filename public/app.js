@@ -27,6 +27,7 @@ const btnCreate        = $('btn-create');
 const btnJoin          = $('btn-join');
 const btnCopyLink      = $('btn-copy-link');
 const btnTransferHost  = $('btn-transfer-host');
+const btnLinkJira      = $('btn-link-jira');
 const transferModal    = $('transfer-modal');
 const transferList     = $('transfer-player-list');
 const btnTransferCancel = $('btn-transfer-cancel');
@@ -261,15 +262,17 @@ function formatMs(ms) {
   return `${m}:${sec}`;
 }
 
-// Resize
-window.addEventListener('resize', () => {
+// Resize — also fires on browser zoom via visualViewport
+function onResize() {
   if (currentRoom) {
     const players = Object.values(currentRoom.players);
     sizeTables();
     renderTeamPlayers(players.filter(p => p.role === 'dev'), currentRoom.revealed, false, 'dev');
     renderTeamPlayers(players.filter(p => p.role === 'qa'),  currentRoom.revealed, false, 'qa');
   }
-});
+}
+window.addEventListener('resize', onResize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 
 // Countdown
 function doCountdown(callback) {
@@ -316,6 +319,7 @@ function render(room, animateFlip = false) {
   gameNameDisplay.textContent = s.gameName || '';
 
   btnTransferHost.classList.toggle('hidden', !isAdmin);
+  updateJiraButton(isAdmin);
 
   if (canAct) {
     btnReveal.classList.toggle('hidden', room.revealed);
@@ -350,6 +354,7 @@ function render(room, animateFlip = false) {
   renderTeamPlayers(devPlayers, room.revealed, animateFlip, 'dev');
   renderTeamPlayers(qaPlayers,  room.revealed, animateFlip, 'qa');
   renderIssues(room.issues || [], room.activeIssueId);
+  renderEstimatePanel(room, isAdmin);
 
   // Picker vs results
   if (room.revealed) {
@@ -364,11 +369,21 @@ function render(room, animateFlip = false) {
 }
 
 function sizeTables() {
-  [['dev', devArea, devPokerTable], ['qa', qaArea, qaPokerTable]].forEach(([, area, table]) => {
+  [['dev', devArea, devPokerTable], ['qa', qaArea, qaPokerTable]].forEach(([team, area, table]) => {
     const aw = area.offsetWidth;
     const ah = area.offsetHeight;
-    table.style.width  = `${Math.min(aw * 0.58, 380)}px`;
-    table.style.height = `${Math.min(ah * 0.90, 700)}px`;
+    const tw = Math.min(aw * 0.58, 380);
+    const th = Math.min(ah * 0.90, 700);
+    table.style.width  = `${tw}px`;
+    table.style.height = `${th}px`;
+
+    // Scale dealer proportionally — 1.0 at max table width (380px), shrinks below that
+    const ds = Math.max(0.3, tw / 380);
+    const dealer      = $(`${team}-dealer`);
+    const dealerHands = $(`${team}-dealer-hands`);
+    const dt = `translate(-50%, -68%) scale(${ds})`;
+    if (dealer)      dealer.style.transform      = dt;
+    if (dealerHands) dealerHands.style.transform = dt;
   });
 }
 
@@ -403,8 +418,8 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
   const ah = area.offsetHeight;
   const cx = aw / 2;
   const cy = ah / 2;
-  const rx = Math.min(aw * 0.38, 230);
-  const ry = Math.min(ah * 0.47, 320);
+  const rx = Math.min(aw * 0.36, 210);
+  const ry = Math.min(ah * 0.45, 300);
 
   // Put "me" near the middle of the arc (bottom position)
   const myIdx = teamPlayers.findIndex(p => p.id === myId);
@@ -416,7 +431,11 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
   }
 
   const N = ordered.length;
-  const scale = N <= 9 ? 1.0 : Math.max(0.55, 1.0 - (N - 9) * 0.05);
+  // Scale seats proportional to table width (same formula as dealer)
+  const tw = Math.min(aw * 0.58, 380);
+  const sizeScale = Math.max(0.3, tw / 380);
+  const crowdScale = N <= 9 ? 1.0 : Math.max(0.55, 1.0 - (N - 9) * 0.05);
+  const scale = sizeScale * crowdScale;
 
   ordered.forEach((player, i) => {
     const angle = teamAngle(i, N);
@@ -501,9 +520,9 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
     if (activeIssue) {
       el.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;opacity:.5">Voting on</div>
-          <div style="font-size:11px;line-height:1.4;opacity:.9">${escHtml(activeIssue.title)}</div>
-          <div style="font-size:10px;opacity:.5;margin-top:2px">${status}</div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.6)">Voting on</div>
+          <div style="font-size:11px;line-height:1.4;color:white">${escHtml(activeIssue.title)}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:2px">${status}</div>
         </div>`;
     } else {
       el.innerHTML = `<span class="table-waiting">${status}</span>`;
@@ -558,11 +577,6 @@ function renderResults(players, settings, room) {
 
   resultsContent.innerHTML = `<div class="results-teams"><div class="results-team">${devHtml}</div><div class="results-team">${qaHtml}</div></div>`;
 
-  resultsContent.querySelectorAll('.btn-save-estimate').forEach(btn => {
-    btn.addEventListener('click', () => {
-      socket.emit('save-team-estimate', { id: btn.dataset.id, team: btn.dataset.team, estimate: btn.dataset.est });
-    });
-  });
 }
 
 function buildTeamResults(teamPlayers, settings, room, team, label) {
@@ -594,22 +608,6 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
       statsHtml = `<div class="results-stats">${avgPart}<span class="results-range">Range: ${min} – ${max}</span></div>`;
     }
 
-    const activeIssue = room.issues?.find(i => i.id === room.activeIssueId);
-    if (activeIssue) {
-      const estimateVal = allSame ? allCards[0] : avgStr;
-      const savedEst = team === 'dev' ? activeIssue.devEstimate : activeIssue.qaEstimate;
-      if (savedEst) {
-        saveHtml = `<div class="results-save-row"><span class="save-confirm">✓ Saved as ${savedEst}</span></div>`;
-      } else {
-        const shortTitle = escHtml(activeIssue.title.slice(0, 28) + (activeIssue.title.length > 28 ? '…' : ''));
-        saveHtml = `
-          <div class="results-save-row">
-            <button class="btn-save-estimate" data-id="${activeIssue.id}" data-team="${team}" data-est="${estimateVal}">
-              Save ${estimateVal} to "${shortTitle}"
-            </button>
-          </div>`;
-      }
-    }
   }
 
   const groups = {};
@@ -650,6 +648,104 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
     ${saveHtml}`;
 }
 
+// ── Jira Estimate Panel ────────────────────────────────────────────────────
+const jiraEstimatePanel = $('jira-estimate-panel');
+let jiraEst = { dev: '', qa: '', original: '' };
+let jiraEstIssueId = null;
+
+function getTopVote(teamPlayers) {
+  const voters = teamPlayers.filter(p => !p.isSpectator && p.card !== null);
+  if (!voters.length) return '';
+  const counts = {};
+  voters.forEach(p => { counts[p.card] = (counts[p.card] || 0) + 1; });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function renderEstimatePanel(room, isAdmin) {
+  const activeIssue = (room.issues || []).find(i => i.id === room.activeIssueId);
+
+  if (!activeIssue?.jiraKey) {
+    jiraEstimatePanel.classList.add('hidden');
+    return;
+  }
+
+  // Reset estimates when active issue changes
+  if (jiraEstIssueId !== activeIssue.id) {
+    jiraEstIssueId = activeIssue.id;
+    jiraEst = { dev: '', qa: '', original: '' };
+  }
+
+  // Auto-populate from votes when revealed
+  if (room.revealed) {
+    const players = Object.values(room.players);
+    const devTop = getTopVote(players.filter(p => p.role === 'dev'));
+    const qaTop  = getTopVote(players.filter(p => p.role === 'qa'));
+    if (devTop) jiraEst.dev = devTop;
+    if (qaTop)  jiraEst.qa  = qaTop;
+    const devNum = parseFloat(jiraEst.dev === '½' ? 0.5 : jiraEst.dev);
+    const qaNum  = parseFloat(jiraEst.qa  === '½' ? 0.5 : jiraEst.qa);
+    if (!isNaN(devNum) && !isNaN(qaNum)) jiraEst.original = String(devNum + qaNum);
+  }
+
+  jiraEstimatePanel.classList.remove('hidden');
+  jiraEstimatePanel.innerHTML = `
+    <div class="jira-est-header">
+      <span class="jira-est-key">${escHtml(activeIssue.jiraKey)}</span>
+      <span class="jira-est-title">Estimates</span>
+    </div>
+    <div class="jira-est-fields">
+      <div class="jira-est-row">
+        <label class="jira-est-label">Original Est. (h)</label>
+        <input class="jira-est-input" id="est-original" type="number" min="0" step="0.5" value="${escHtml(jiraEst.original)}" ${isAdmin ? '' : 'disabled'}>
+      </div>
+      <div class="jira-est-row">
+        <label class="jira-est-label">Dev Est.</label>
+        <input class="jira-est-input" id="est-dev" type="number" min="0" step="0.5" value="${escHtml(jiraEst.dev)}" ${isAdmin ? '' : 'disabled'}>
+      </div>
+      <div class="jira-est-row">
+        <label class="jira-est-label">QA Est.</label>
+        <input class="jira-est-input" id="est-qa" type="number" min="0" step="0.5" value="${escHtml(jiraEst.qa)}" ${isAdmin ? '' : 'disabled'}>
+      </div>
+    </div>
+    ${isAdmin ? `<button class="btn-save-jira" id="btn-save-jira">Save to Jira</button>` : ''}
+  `;
+
+  // Keep local state in sync as user edits
+  ['dev','qa','original'].forEach(key => {
+    const el = $(`est-${key}`);
+    if (el) el.addEventListener('input', () => { jiraEst[key] = el.value; });
+  });
+
+  const saveBtn = $('btn-save-jira');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.textContent = 'Saving…';
+      saveBtn.disabled = true;
+      try {
+        const res = await fetch('/api/jira/update-issue', {
+          method: 'POST',
+          headers: jiraHeaders(),
+          body: JSON.stringify({
+            issueKey:        activeIssue.jiraKey,
+            devEstimate:     jiraEst.dev,
+            qaEstimate:      jiraEst.qa,
+            originalEstimate: jiraEst.original,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+        saveBtn.textContent = '✓ Saved!';
+        showToast(`Saved estimates to ${activeIssue.jiraKey}`, 'join');
+        setTimeout(() => { if (saveBtn) { saveBtn.textContent = 'Save to Jira'; saveBtn.disabled = false; } }, 2500);
+      } catch (err) {
+        showToast(`Save failed: ${err.message}`, 'leave');
+        saveBtn.textContent = 'Save to Jira';
+        saveBtn.disabled = false;
+      }
+    });
+  }
+}
+
 function renderIssues(issues, activeId) {
   issueList.innerHTML = '';
   if (!issues.length) {
@@ -681,6 +777,190 @@ function renderIssues(issues, activeId) {
     issueList.appendChild(li);
   });
 }
+
+// ── Jira OAuth session ─────────────────────────────────────────────────────
+let jiraSession = sessionStorage.getItem('jiraSession') || null;
+let jiraDomain  = sessionStorage.getItem('jiraDomain')  || null;
+
+function jiraHeaders() {
+  return { 'Content-Type': 'application/json', 'x-jira-session': jiraSession || '' };
+}
+
+function updateJiraButton(isAdmin) {
+  if (!isAdmin) { btnLinkJira.classList.add('hidden'); return; }
+  btnLinkJira.classList.remove('hidden');
+  btnLinkJira.textContent = jiraSession ? `Jira: ${jiraDomain}` : 'Link Jira';
+  btnLinkJira.classList.toggle('jira-linked', !!jiraSession);
+}
+
+btnLinkJira.addEventListener('click', () => {
+  if (jiraSession) {
+    // Already linked — click to unlink
+    jiraSession = null; jiraDomain = null;
+    sessionStorage.removeItem('jiraSession');
+    sessionStorage.removeItem('jiraDomain');
+    updateJiraButton(true);
+    showToast('Jira unlinked', 'info');
+    return;
+  }
+  const popup = window.open('/auth/jira', 'jira-auth', 'width=560,height=680,left=200,top=100');
+  if (!popup) { showToast('Allow popups to link Jira', 'leave'); return; }
+  const onMsg = e => {
+    if (e.origin !== location.origin) return;
+    if (e.data.jiraSession) {
+      jiraSession = e.data.jiraSession;
+      jiraDomain  = e.data.jiraDomain;
+      sessionStorage.setItem('jiraSession', jiraSession);
+      sessionStorage.setItem('jiraDomain',  jiraDomain);
+      updateJiraButton(true);
+      showToast(`Jira linked: ${jiraDomain}`, 'join');
+    } else if (e.data.jiraError) {
+      showToast(`Jira error: ${e.data.jiraError}`, 'leave');
+    }
+    window.removeEventListener('message', onMsg);
+  };
+  window.addEventListener('message', onMsg);
+});
+
+// ── Jira Import ────────────────────────────────────────────────────────────
+const jiraModal        = $('jira-modal');
+const btnJiraImport    = $('btn-jira-import');
+const btnJiraCancel    = $('btn-jira-cancel');
+const btnJiraFetch     = $('btn-jira-fetch');
+const jiraResults      = $('jira-results');
+const selJiraBoard  = $('sel-jira-board');
+const selJiraSprint = $('sel-jira-sprint');
+const stepSprint    = $('jira-step-sprint');
+
+async function jiraGet(url) {
+  const res = await fetch(url, { headers: { 'x-jira-session': jiraSession || '' } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  return data;
+}
+
+btnJiraImport.addEventListener('click', async () => {
+  if (!jiraSession) { showToast('Link your Jira account first (top-right)', 'info'); return; }
+  jiraResults.innerHTML = '';
+  jiraResults.classList.add('hidden');
+  stepSprint.classList.add('hidden');
+  btnJiraFetch.disabled = true;
+  selJiraBoard.innerHTML = '<option>Loading boards…</option>';
+  selJiraBoard.disabled = true;
+  jiraModal.classList.remove('hidden');
+
+  try {
+    const { boards } = await jiraGet('/api/jira/boards');
+    selJiraBoard.innerHTML = '<option value="">Select a board…</option>';
+    boards.forEach(b => {
+      const opt = document.createElement('option');
+      opt.dataset.projectKey = b.projectKey || '';
+      opt.value = b.id;
+      opt.textContent = b.project ? `${b.project} — ${b.name}` : b.name;
+      selJiraBoard.appendChild(opt);
+    });
+    selJiraBoard.disabled = false;
+  } catch (err) {
+    selJiraBoard.innerHTML = `<option>Error: ${escHtml(err.message)}</option>`;
+  }
+});
+
+selJiraBoard.addEventListener('change', async () => {
+  const boardId = selJiraBoard.value;
+  stepSprint.classList.add('hidden');
+  btnJiraFetch.disabled = true;
+  if (!boardId) return;
+
+  stepSprint.classList.remove('hidden');
+  selJiraSprint.innerHTML = '<option>Loading…</option>';
+  selJiraSprint.disabled = true;
+
+  try {
+    const data = await jiraGet(`/api/jira/sprints?boardId=${encodeURIComponent(boardId)}`);
+    selJiraSprint.innerHTML = '';
+    const selectedOpt = selJiraBoard.options[selJiraBoard.selectedIndex];
+    const projectKey = selectedOpt?.dataset.projectKey || '';
+    const backlog = document.createElement('option');
+    backlog.value = `__backlog__:${projectKey}`;
+    backlog.textContent = 'Backlog';
+    selJiraSprint.appendChild(backlog);
+    if (!data.kanban && data.sprints?.length) {
+      data.sprints.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} [${s.state}]`;
+        selJiraSprint.appendChild(opt);
+      });
+    }
+    selJiraSprint.disabled = false;
+    btnJiraFetch.disabled = false;
+  } catch (err) {
+    selJiraSprint.innerHTML = `<option>Error: ${escHtml(err.message)}</option>`;
+  }
+});
+
+btnJiraCancel.addEventListener('click', () => jiraModal.classList.add('hidden'));
+jiraModal.addEventListener('click', e => { if (e.target === jiraModal) jiraModal.classList.add('hidden'); });
+
+btnJiraFetch.addEventListener('click', async () => {
+  const sprintVal = selJiraSprint.value;
+  if (!sprintVal) return;
+  btnJiraFetch.textContent = 'Fetching…';
+  btnJiraFetch.disabled = true;
+  jiraResults.innerHTML = '';
+  jiraResults.classList.add('hidden');
+
+  const isBacklog  = sprintVal.startsWith('__backlog__:');
+  const projectKey = isBacklog ? sprintVal.split(':')[1] : null;
+  const sprintId   = isBacklog ? null : sprintVal;
+  const issueUrl   = isBacklog
+    ? `/api/jira/issues?projectKey=${encodeURIComponent(projectKey)}`
+    : `/api/jira/issues?sprintId=${encodeURIComponent(sprintId)}`;
+
+  try {
+    const data = await jiraGet(issueUrl);
+
+    if (!data.issues.length) {
+      jiraResults.innerHTML = '<p class="jira-empty">No issues found in this sprint.</p>';
+      jiraResults.classList.remove('hidden');
+      return;
+    }
+
+    const hint = document.createElement('p');
+    hint.className = 'jira-hint';
+    hint.textContent = `${data.issues.length} issue${data.issues.length !== 1 ? 's' : ''} — click to add`;
+
+    const ul = document.createElement('ul');
+    ul.className = 'jira-issue-list';
+
+    data.issues.forEach(issue => {
+      const li = document.createElement('li');
+      li.className = 'jira-issue-item';
+      li.innerHTML = `
+        <span class="jira-key">${escHtml(issue.key)}</span>
+        <span class="jira-summary">${escHtml(issue.title.replace(issue.key + ': ', ''))}</span>
+        <span class="jira-status">${escHtml(issue.status)}</span>`;
+      li.addEventListener('click', () => {
+        socket.emit('add-issue', { title: issue.title, jiraKey: issue.key });
+        li.classList.add('jira-imported');
+        li.style.opacity = '0.45';
+        li.style.pointerEvents = 'none';
+        showToast(`Added: ${issue.key}`, 'info');
+      });
+      ul.appendChild(li);
+    });
+
+    jiraResults.appendChild(hint);
+    jiraResults.appendChild(ul);
+    jiraResults.classList.remove('hidden');
+  } catch (err) {
+    jiraResults.innerHTML = `<p class="jira-error">${escHtml(err.message)}</p>`;
+    jiraResults.classList.remove('hidden');
+  } finally {
+    btnJiraFetch.textContent = 'Fetch Issues';
+    btnJiraFetch.disabled = false;
+  }
+});
 
 // Helpers
 function showScreen(name) {

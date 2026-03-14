@@ -1,5 +1,7 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 const path = require('path');
 
@@ -8,6 +10,192 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
+
+// ── Jira OAuth ──────────────────────────────────────────────────────────────
+const jiraSessions = {}; // sessionId → { accessToken, cloudId, domain }
+
+function httpRequest(hostname, authHeader, method, path, body) {
+  return new Promise((resolve, reject) => {
+    const bodyStr = body ? JSON.stringify(body) : null;
+    const headers = { Accept: 'application/json' };
+    if (authHeader) headers['Authorization'] = authHeader;
+    if (bodyStr) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(bodyStr); }
+    const req = https.request({ hostname, path, method, headers }, res => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    if (bodyStr) req.write(bodyStr);
+    req.end();
+  });
+}
+
+function jiraFetch(session, apiPath) {
+  const fullPath = `/ex/jira/${session.cloudId}${apiPath}`;
+  console.log(`[jira fetch] GET https://api.atlassian.com${fullPath}`);
+  console.log(`[jira fetch] token: Bearer ${session.accessToken.slice(0, 40)}...`);
+  return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'GET', fullPath, null);
+}
+
+function jiraPut(session, apiPath, body) {
+  return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'PUT', `/ex/jira/${session.cloudId}${apiPath}`, body);
+}
+
+function jiraPost(session, apiPath, body) {
+  return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'POST', `/ex/jira/${session.cloudId}${apiPath}`, body);
+}
+
+function jiraRoute(method, route, handler) {
+  app[method](route, async (req, res) => {
+    const sessionId = req.headers['x-jira-session'];
+    const session = jiraSessions[sessionId];
+    console.log(`[jira route] ${method.toUpperCase()} ${route} sessionId=${sessionId?.slice(0,10)} found=${!!session}`);
+    if (!session) return res.status(401).json({ error: 'Not authenticated with Jira.' });
+    try { await handler(req, res, session); }
+    catch (err) { res.status(500).json({ error: err.message }); }
+  });
+}
+
+// OAuth — redirect to Atlassian login
+app.get('/auth/jira', (req, res) => {
+  const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  jiraSessions[`state_${state}`] = { expires: Date.now() + 5 * 60 * 1000 };
+  const scopes = 'read:jira-work write:jira-work read:issue:jira write:issue:jira read:board-scope:jira-software read:sprint:jira-software';
+  const redirectUri = `${process.env.APP_URL}/auth/jira/callback`;
+  const url = `https://auth.atlassian.com/authorize?audience=api.atlassian.com`
+    + `&client_id=${process.env.ATLASSIAN_CLIENT_ID}`
+    + `&scope=${encodeURIComponent(scopes)}`
+    + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+    + `&state=${state}&response_type=code&prompt=consent`;
+  res.redirect(url);
+});
+
+// OAuth — Atlassian redirects back here with code
+app.get('/auth/jira/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  const stateKey = `state_${state}`;
+
+  const fail = msg => res.send(`<script>window.opener?.postMessage({jiraError:${JSON.stringify(msg)}},location.origin);window.close();</script>`);
+
+  if (error) return fail(error);
+  if (!jiraSessions[stateKey] || jiraSessions[stateKey].expires < Date.now()) return fail('Invalid or expired state.');
+  delete jiraSessions[stateKey];
+
+  try {
+    // Exchange code for access token
+    const redirectUri = `${process.env.APP_URL}/auth/jira/callback`;
+    const tokenRes = await httpRequest('auth.atlassian.com', null, 'POST', '/oauth/token', {
+      grant_type: 'authorization_code',
+      client_id: process.env.ATLASSIAN_CLIENT_ID,
+      client_secret: process.env.ATLASSIAN_CLIENT_SECRET,
+      code, redirect_uri: redirectUri,
+    });
+    if (tokenRes.status !== 200) return fail('Token exchange failed.');
+    const { access_token } = JSON.parse(tokenRes.body);
+
+    // Get their Jira cloud ID + domain
+    const resourcesRes = await httpRequest('api.atlassian.com', `Bearer ${access_token}`, 'GET', '/oauth/token/accessible-resources', null);
+    const resources = JSON.parse(resourcesRes.body);
+    if (!resources.length) return fail('No Jira sites found for this account.');
+    const { id: cloudId, url } = resources[0];
+    const domain = url.replace('https://', '');
+    // Decode JWT payload to log granted scopes
+    try {
+      const payload = JSON.parse(Buffer.from(access_token.split('.')[1], 'base64url').toString());
+      console.log(`[jira oauth] granted scopes:`, payload.scope || payload.scp || '(none found)');
+    } catch {}
+    console.log(`[jira oauth] cloudId=${cloudId} domain=${domain} token_length=${access_token?.length}`);
+
+    // Store session
+    const sessionId = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    jiraSessions[sessionId] = { accessToken: access_token, cloudId, domain };
+
+    res.send(`<script>window.opener?.postMessage({jiraSession:${JSON.stringify(sessionId)},jiraDomain:${JSON.stringify(domain)}},location.origin);window.close();</script>`);
+  } catch (err) {
+    fail(err.message);
+  }
+});
+
+// ── Jira API proxy ──────────────────────────────────────────────────────────
+jiraRoute('get', '/api/jira/boards', async (req, res, session) => {
+  const { status, body } = await jiraFetch(session, '/rest/agile/1.0/board?maxResults=50');
+  console.log(`[jira boards] status=${status}`);
+  if (status !== 200) { console.log('[jira boards] body=', body); return res.status(status).json({ error: `Jira returned ${status}` }); }
+  const boards = (JSON.parse(body).values || []).map(b => ({
+    id: b.id, name: b.name, type: b.type,
+    project: b.location?.projectName || '',
+    projectKey: b.location?.projectKey || '',
+  }));
+  res.json({ boards });
+});
+
+jiraRoute('get', '/api/jira/sprints', async (req, res, session) => {
+  const boardId = req.query.boardId;
+  if (!boardId) return res.status(400).json({ error: 'boardId required' });
+  const { status, body } = await jiraFetch(session, `/rest/agile/1.0/board/${boardId}/sprint?state=active,future&maxResults=25`);
+  if (status === 410) return res.json({ sprints: [], kanban: true });
+  console.log(`[jira sprints] status=${status}`);
+  if (status !== 200) return res.status(status).json({ error: `Jira returned ${status}` });
+  const sprints = (JSON.parse(body).values || []).map(s => ({ id: s.id, name: s.name, state: s.state }));
+  res.json({ sprints });
+});
+
+jiraRoute('get', '/api/jira/projects', async (req, res, session) => {
+  const { status, body } = await jiraFetch(session, '/rest/api/3/project?maxResults=50');
+  console.log(`[jira projects] status=${status}`);
+  if (status !== 200) { console.log('[jira projects] body=', body); return res.status(status).json({ error: `Jira returned ${status}` }); }
+  const projects = (JSON.parse(body) || []).map(p => ({ id: p.id, key: p.key, name: p.name }));
+  res.json({ projects });
+});
+
+jiraRoute('get', '/api/jira/issues', async (req, res, session) => {
+  const maxResults = Math.min(Number(req.query.maxResults) || 100, 100);
+  const sprintId   = req.query.sprintId;
+  const boardId    = req.query.boardId;
+
+  const projectKey = req.query.projectKey;
+
+  let jql;
+  if (sprintId) {
+    jql = `sprint = ${sprintId} AND status not in (Done, Closed, Resolved) ORDER BY created DESC`;
+  } else if (projectKey) {
+    jql = `project = "${projectKey}" AND status not in (Done, Closed, Resolved) ORDER BY created DESC`;
+  } else {
+    return res.status(400).json({ error: 'sprintId or projectKey required' });
+  }
+
+  const { status, body } = await jiraPost(session, '/rest/api/3/search', {
+    jql, fields: ['summary', 'status', 'issuetype'], maxResults,
+  });
+  console.log(`[jira issues] status=${status}`);
+  if (status !== 200) { console.log('[jira issues] body=', body); return res.status(status).json({ error: `Jira returned ${status}`, detail: body }); }
+  const parsed = JSON.parse(body);
+  const issues = (parsed.issues || []).map(i => ({
+    key:    i.key,
+    title:  `${i.key}: ${i.fields.summary}`,
+    status: i.fields.status?.name || '',
+    type:   i.fields.issuetype?.name || '',
+  }));
+  res.json({ issues, total: parsed.total });
+});
+
+jiraRoute('post', '/api/jira/update-issue', async (req, res, session) => {
+  const { issueKey, devEstimate, qaEstimate, originalEstimate } = req.body || {};
+  if (!issueKey) return res.status(400).json({ error: 'issueKey required' });
+  const toNum = v => (v !== '' && v !== null && v !== undefined) ? Number(v) : null;
+  const fields = {};
+  const devNum  = toNum(devEstimate);
+  const qaNum   = toNum(qaEstimate);
+  const origNum = toNum(originalEstimate);
+  if (devNum  !== null) fields['customfield_15945'] = devNum;
+  if (qaNum   !== null) fields['customfield_15944'] = qaNum;
+  if (origNum !== null) fields['timetracking'] = { originalEstimate: `${origNum}h` };
+  const { status, body } = await jiraPut(session, `/rest/api/3/issue/${issueKey}`, { fields });
+  if (status !== 204) return res.status(status).json({ error: `Jira returned ${status}`, detail: body });
+  res.json({ ok: true });
+});
 
 const rooms = {};
 
@@ -167,12 +355,12 @@ io.on('connection', (socket) => {
   });
 
   // ── Issues ─────────────────────────────────────────────────────────────────
-  socket.on('add-issue', ({ title }) => {
+  socket.on('add-issue', ({ title, jiraKey }) => {
     const room = rooms[socket.roomCode];
     if (!room) return;
     const t = String(title).trim().slice(0, 200);
     if (!t) return;
-    const issue = { id: generateId(), title: t, devEstimate: null, qaEstimate: null };
+    const issue = { id: generateId(), title: t, jiraKey: jiraKey || null, devEstimate: null, qaEstimate: null };
     room.issues.push(issue);
     if (!room.activeIssueId) room.activeIssueId = issue.id;
     io.to(socket.roomCode).emit('room-update', room);

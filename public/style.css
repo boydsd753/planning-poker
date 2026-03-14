@@ -20,6 +20,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
+  min-width: 320px;
 }
 
 /* ── Screens ─────────────────────────────────────────────────────────────── */
@@ -166,7 +167,8 @@ input[type=text]:focus, .select-input:focus { border-color: var(--primary); }
   white-space: nowrap; transition: all 0.2s;
 }
 .btn-ghost:hover  { border-color: var(--text); color: var(--text); }
-.btn-ghost.copied { color: var(--success); border-color: var(--success); }
+.btn-ghost.copied      { color: var(--success); border-color: var(--success); }
+.btn-ghost.jira-linked { color: #60a5fa; border-color: #1d4ed8; }
 
 .btn-reveal {
   padding: 8px 20px; background: var(--gold); color: #000;
@@ -247,8 +249,14 @@ input[type=text]:focus, .select-input:focus { border-color: var(--primary); }
 }
 
 .table-center-content {
-  text-align: center; color: rgba(255,255,255,0.65);
+  text-align: center; color: white;
   font-size: 13px; padding: 10px; max-width: 200px;
+}
+.table-center-content div {
+  background: rgba(0,0,0,0.45);
+  border-radius: 8px;
+  padding: 6px 10px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
 .table-waiting { font-size: 14px; color: rgba(255,255,255,0.5); }
 
@@ -373,6 +381,7 @@ input[type=text]:focus, .select-input:focus { border-color: var(--primary); }
   top: 0;
   left: 50%;
   transform: translate(-50%, -68%);
+  transform-origin: top center;
   z-index: 1;
   pointer-events: none;
   display: flex;
@@ -387,6 +396,7 @@ input[type=text]:focus, .select-input:focus { border-color: var(--primary); }
   top: 0;
   left: 50%;
   transform: translate(-50%, -68%);
+  transform-origin: top center;
   z-index: 3;
   pointer-events: none;
   filter: drop-shadow(0 6px 20px rgba(0,0,0,0.7));
@@ -638,3 +648,195 @@ input[type=text]:focus, .select-input:focus { border-color: var(--primary); }
 .toast.leave { background: #dc2626; }
 .toast.host  { background: var(--gold); color: #000; }
 .toast.info  { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+
+/* ── Jira Import ─────────────────────────────────────────────────────────── */
+.jira-modal-box {
+  max-width: 460px; width: 100%;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.jira-step { display: flex; flex-direction: column; gap: 5px; }
+.jira-step.hidden { display: none; }
+.jira-label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.jira-select { font-size: 13px; }
+
+/* ── Jira Estimate Panel ─────────────────────────────────────────────────── */
+.jira-estimate-panel {
+  margin: 0 12px 4px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.jira-estimate-panel.hidden { display: none; }
+
+.jira-est-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.jira-est-key {
+  font-size: 11px; font-weight: 700; color: #60a5fa;
+  background: rgba(59,130,246,0.1); padding: 2px 7px;
+  border-radius: 4px; flex-shrink: 0;
+}
+.jira-est-title {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+.jira-est-fields { display: flex; flex-direction: column; gap: 7px; }
+.jira-est-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.jira-est-label { font-size: 12px; color: var(--muted); flex: 1; }
+.jira-est-input {
+  width: 72px; padding: 5px 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 13px;
+  font-weight: 600; text-align: right; outline: none;
+  font-family: inherit; transition: border-color 0.2s;
+}
+.jira-est-input:focus { border-color: var(--primary); }
+.jira-est-input:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-save-jira {
+  width: 100%; padding: 8px;
+  background: #0052cc; color: white;
+  border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: opacity 0.2s;
+}
+.btn-save-jira:hover:not(:disabled) { opacity: 0.85; }
+.btn-save-jira:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-jira-import {
+  margin: 0 12px 12px;
+  padding: 8px 12px;
+  background: #0052cc;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.btn-jira-import::before { content: '🔗'; font-size: 14px; }
+.btn-jira-import:hover { opacity: 0.85; }
+
+.jira-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.jira-results.hidden { display: none; }
+.jira-results::-webkit-scrollbar { width: 4px; }
+.jira-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.jira-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.jira-error  { font-size: 13px; color: var(--error); margin: 0; }
+.jira-empty  { font-size: 13px; color: var(--muted); margin: 0; }
+
+.jira-issue-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.jira-issue-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.jira-issue-item:hover { border-color: #0052cc; background: rgba(0,82,204,0.08); }
+.jira-key     { font-size: 11px; font-weight: 700; color: #60a5fa; flex-shrink: 0; }
+.jira-summary { font-size: 13px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jira-status  { font-size: 10px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+/* Tablet / zoomed-in desktop (≤ 1024px) */
+@media (max-width: 1024px) {
+  .game-header { padding: 8px 14px; gap: 8px; }
+  .game-name-display { max-width: 140px; font-size: 13px; }
+  .btn-reveal, .btn-new-round { padding: 6px 14px; font-size: 13px; }
+  .btn-ghost { padding: 5px 10px; font-size: 12px; }
+  .timer-display { font-size: 13px; }
+  .pick-card { width: 46px; height: 66px; font-size: 15px; }
+}
+
+/* Stack tables vertically on narrow screens (≤ 860px) */
+@media (max-width: 860px) {
+  .tables-container { flex-direction: column; }
+  .team-area { border-right: none; border-bottom: 1px solid var(--border); min-height: 280px; }
+  .team-area:last-child { border-bottom: none; }
+  .results-teams { flex-direction: column; gap: 12px; }
+  .landing-box { padding: 28px 20px; }
+}
+
+/* Mobile (≤ 640px) */
+@media (max-width: 640px) {
+  /* Landing */
+  .landing-box { padding: 20px 16px; gap: 14px; margin: 8px; border-radius: 12px; }
+  .logo-icon { font-size: 36px; }
+  .logo h1 { font-size: 22px; }
+
+  /* Header — wrap to two rows */
+  .game-header { flex-wrap: wrap; padding: 6px 10px; gap: 6px; }
+  .header-left  { flex: 1; min-width: 0; }
+  .header-right { gap: 4px; }
+  .header-center { order: 3; width: 100%; justify-content: center; gap: 10px; padding: 2px 0; }
+  .game-name-display { max-width: 100px; font-size: 12px; }
+  .room-label { font-size: 11px; }
+  .btn-ghost { padding: 4px 8px; font-size: 11px; }
+  .btn-reveal, .btn-new-round { padding: 5px 10px; font-size: 12px; }
+  .vote-tally { font-size: 11px; }
+  .timer-display { font-size: 12px; min-width: 36px; }
+  .timer-wrap { padding: 3px 7px; }
+
+  /* Tables */
+  .team-label { font-size: 10px; padding: 2px 8px; top: 4px; }
+  .team-area { min-height: 240px; }
+
+  /* Picker */
+  .picker-area { padding: 14px 10px 10px; }
+  .cards-row { gap: 5px; padding-top: 14px; }
+  .pick-card { width: 40px; height: 58px; font-size: 14px; border-radius: 6px; }
+  .picker-label { font-size: 10px; }
+
+  /* Results */
+  .results-avg { font-size: 13px; }
+  .results-range { font-size: 11px; }
+  .vote-card-mini { width: 34px; height: 48px; font-size: 12px; }
+  .vote-bar-wrap { height: 44px; }
+  .vote-names { font-size: 9px; }
+  .results-team-header { font-size: 10px; }
+
+  /* Player seats */
+  .player-card-wrap { width: 40px; height: 58px; }
+  .player-avatar { width: 30px; height: 30px; font-size: 11px; }
+  .player-name { font-size: 10px; padding: 1px 6px; max-width: 72px; }
+
+  /* Sidebar */
+  .issues-sidebar.open { width: 240px; }
+
+  /* Modal */
+  .modal-box { min-width: 240px; padding: 18px 16px; }
+}

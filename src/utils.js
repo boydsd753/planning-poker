@@ -3,12 +3,14 @@
 const https = require('https');
 
 const DEFAULT_SETTINGS = {
-  gameName:     '',
-  deck:         'fibonacci',
-  whoCanReveal: 'host',
-  autoReveal:   false,
-  showAverage:  true,
-  countdown:    true,
+  gameName:        '',
+  deck:            'fibonacci',
+  whoCanReveal:    'host',
+  autoReveal:      false,
+  showAverage:     true,
+  countdown:       true,
+  timerDuration:   120,
+  timerAutoReveal: false,
 };
 
 function generateRoomCode() {
@@ -25,12 +27,17 @@ function generateId() {
 function sanitizeSettings(raw = {}) {
   return {
     gameName:     String(raw.gameName    ?? DEFAULT_SETTINGS.gameName).trim().slice(0, 60),
-    deck:         ['fibonacci','modified','tshirt','powers2','sequential'].includes(raw.deck)
+    deck:         ['fibonacci','modified','tshirt','powers2','sequential','custom'].includes(raw.deck)
                     ? raw.deck : DEFAULT_SETTINGS.deck,
+    customDeck:   raw.deck === 'custom' && Array.isArray(raw.customDeck)
+                    ? raw.customDeck.map(v => String(v).trim().slice(0, 10)).filter(Boolean).slice(0, 20)
+                    : [],
     whoCanReveal: ['host','all'].includes(raw.whoCanReveal) ? raw.whoCanReveal : DEFAULT_SETTINGS.whoCanReveal,
-    autoReveal:   Boolean(raw.autoReveal  ?? DEFAULT_SETTINGS.autoReveal),
-    showAverage:  Boolean(raw.showAverage ?? DEFAULT_SETTINGS.showAverage),
-    countdown:    Boolean(raw.countdown   ?? DEFAULT_SETTINGS.countdown),
+    autoReveal:      Boolean(raw.autoReveal      ?? DEFAULT_SETTINGS.autoReveal),
+    showAverage:     Boolean(raw.showAverage     ?? DEFAULT_SETTINGS.showAverage),
+    countdown:       Boolean(raw.countdown       ?? DEFAULT_SETTINGS.countdown),
+    timerDuration:   [30,60,120,180,300].includes(Number(raw.timerDuration)) ? Number(raw.timerDuration) : DEFAULT_SETTINGS.timerDuration,
+    timerAutoReveal: Boolean(raw.timerAutoReveal ?? DEFAULT_SETTINGS.timerAutoReveal),
   };
 }
 

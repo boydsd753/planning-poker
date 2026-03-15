@@ -111,6 +111,7 @@ module.exports = function registerHandlers(io) {
       if (!room || room.timer.running) return;
       room.timer.running = true;
       room.timer.startedAt = Date.now();
+      room.timer.duration = room.settings.timerDuration || 120;
       io.to(socket.roomCode).emit('room-update', room);
     });
 
@@ -126,7 +127,7 @@ module.exports = function registerHandlers(io) {
     socket.on('timer-reset', () => {
       const room = rooms[socket.roomCode];
       if (!room) return;
-      room.timer = { running: false, startedAt: null, elapsed: 0 };
+      room.timer = { running: false, startedAt: null, elapsed: 0, duration: room.settings.timerDuration || 120 };
       io.to(socket.roomCode).emit('room-update', room);
     });
 

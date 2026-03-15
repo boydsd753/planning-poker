@@ -80,7 +80,12 @@
             <option value="tshirt" data-label="T-Shirt Sizes" data-sub="XS, S, M, L, XL, XXL, ?, Break">T-Shirt Sizes</option>
             <option value="powers2" data-label="Powers of 2" data-sub="0, 1, 2, 4, 8, 16, 32, 64, ?, Break">Powers of 2</option>
             <option value="sequential" data-label="Sequential" data-sub="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ?, Break">Sequential</option>
+            <option value="custom" data-label="Custom" data-sub="Define your own card values">Custom</option>
           </select>
+          <div id="custom-deck-wrap" class="custom-deck-wrap hidden">
+            <input id="inp-custom-deck" type="text" placeholder="e.g. 1, 2, 4, 8, 16, ?" autocomplete="off" maxlength="200">
+            <span class="custom-deck-hint">Separate values with commas. Max 20 cards.</span>
+          </div>
         </div>
         <div class="input-group">
           <label>Who can reveal cards</label>
@@ -114,6 +119,29 @@
             <span class="toggle-hint">3-2-1 animation before cards flip.</span>
           </div>
           <button type="button" class="toggle-btn active" id="tog-countdown" aria-pressed="true"></button>
+        </div>
+        <div class="divider"></div>
+        <div class="input-group">
+          <label>Voting timer</label>
+          <div class="seg-control" data-for="sel-timer-duration">
+            <button type="button" class="seg-btn" data-value="30">30s</button>
+            <button type="button" class="seg-btn active" data-value="120">2m</button>
+            <button type="button" class="seg-btn" data-value="180">3m</button>
+            <button type="button" class="seg-btn" data-value="300">5m</button>
+          </div>
+          <select id="sel-timer-duration" class="hidden">
+            <option value="30">30s</option>
+            <option value="120" selected>2m</option>
+            <option value="180">3m</option>
+            <option value="300">5m</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label">Auto-reveal when timer ends</span>
+            <span class="toggle-hint">Automatically reveal cards when the countdown hits zero.</span>
+          </div>
+          <button type="button" class="toggle-btn" id="tog-timer-auto-reveal" aria-pressed="false"></button>
         </div>
         <button id="btn-create" class="btn-primary">Create Game</button>
       </div>

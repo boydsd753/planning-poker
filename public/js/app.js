@@ -46,10 +46,16 @@ function initCustomSelect(cs) {
       li.addEventListener('mousedown', e => {
         e.preventDefault();
         nativeSel.value = opt.value;
+        nativeSel.dispatchEvent(new Event('change'));
         valueEl.textContent = opt.dataset.label || opt.text;
         dropdown.querySelectorAll('.csel-option').forEach(o =>
           o.classList.toggle('selected', o.dataset.value === opt.value));
         closeDropdown();
+        // Show/hide custom deck input
+        if (nativeSel.id === 'sel-deck') {
+          const wrap = document.getElementById('custom-deck-wrap');
+          if (wrap) wrap.classList.toggle('hidden', opt.value !== 'custom');
+        }
       });
       dropdown.appendChild(li);
     });
@@ -81,6 +87,7 @@ function initSegControl(sc) {
 
 document.querySelectorAll('.custom-select').forEach(initCustomSelect);
 document.querySelectorAll('.seg-control').forEach(initSegControl);
+
 document.addEventListener('click', () => {
   document.querySelectorAll('.csel-dropdown:not(.hidden)').forEach(d => {
     d.classList.add('hidden');
@@ -254,13 +261,19 @@ function toggleValue(btn) {
 });
 
 function getSettings() {
+  const customDeck = selDeck.value === 'custom'
+    ? ($('inp-custom-deck')?.value || '').split(',').map(v => v.trim()).filter(Boolean).slice(0, 20)
+    : [];
   return {
-    gameName:     inpGameName.value.trim(),
-    deck:         selDeck.value,
-    whoCanReveal: selWhoReveal.value,
-    autoReveal:   togAutoReveal.classList.contains('active'),
-    showAverage:  togShowAvg.classList.contains('active'),
-    countdown:    togCountdown.classList.contains('active'),
+    gameName:        inpGameName.value.trim(),
+    deck:            selDeck.value,
+    customDeck,
+    whoCanReveal:    selWhoReveal.value,
+    autoReveal:      togAutoReveal.classList.contains('active'),
+    showAverage:     togShowAvg.classList.contains('active'),
+    countdown:       togCountdown.classList.contains('active'),
+    timerDuration:   Number($('sel-timer-duration')?.value || 120),
+    timerAutoReveal: $('tog-timer-auto-reveal')?.classList.contains('active') || false,
   };
 }
 
@@ -442,26 +455,46 @@ btnTimerReset.addEventListener('click', () => socket.emit('timer-reset'));
 function syncTimer(timer) {
   if (!timer) return;
   clearInterval(timerInterval);
+  const duration = (timer.duration || currentRoom?.settings?.timerDuration || 120) * 1000;
+
+  const getRemaining = () => {
+    const elapsed = (timer.elapsed || 0) + (timer.running ? Date.now() - timer.startedAt : 0);
+    return Math.max(0, duration - elapsed);
+  };
+
+  const updateDisplay = () => {
+    const rem = getRemaining();
+    timerDisplay.textContent = formatMs(rem);
+    const isUrgent = rem <= 30000 && rem > 0;
+    timerDisplay.classList.toggle('timer-urgent', isUrgent);
+    if (rem === 0) {
+      timerDisplay.classList.add('timer-expired');
+      timerDisplay.classList.remove('timer-urgent', 'running');
+      clearInterval(timerInterval);
+      // Auto-reveal when timer hits zero (host only)
+      if (wasAdmin && currentRoom?.settings?.timerAutoReveal && !currentRoom?.revealed) {
+        socket.emit('reveal');
+      }
+    }
+  };
+
   if (timer.running) {
     timerDisplay.classList.add('running');
+    timerDisplay.classList.remove('timer-expired');
     btnTimerStart.classList.add('hidden');
     btnTimerPause.classList.remove('hidden');
-    const tick = () => {
-      const ms = (timer.elapsed || 0) + (Date.now() - timer.startedAt);
-      timerDisplay.textContent = formatMs(ms);
-    };
-    tick();
-    timerInterval = setInterval(tick, 500);
+    updateDisplay();
+    timerInterval = setInterval(updateDisplay, 500);
   } else {
-    timerDisplay.classList.remove('running');
+    timerDisplay.classList.remove('running', 'timer-expired', 'timer-urgent');
     btnTimerStart.classList.remove('hidden');
     btnTimerPause.classList.add('hidden');
-    timerDisplay.textContent = formatMs(timer.elapsed || 0);
+    updateDisplay();
   }
 }
 
 function formatMs(ms) {
-  const s = Math.floor(ms / 1000);
+  const s = Math.ceil(ms / 1000);
   const m = Math.floor(s / 60).toString().padStart(2, '0');
   const sec = (s % 60).toString().padStart(2, '0');
   return `${m}:${sec}`;
@@ -614,7 +647,9 @@ function sizeTables() {
 }
 
 function renderCardPicker(revealed, me, deckKey) {
-  const cards = DECKS[deckKey] || DECKS.fibonacci;
+  const cards = deckKey === 'custom'
+    ? (currentRoom?.settings?.customDeck?.length ? currentRoom.settings.customDeck : DECKS.fibonacci)
+    : (DECKS[deckKey] || DECKS.fibonacci);
   cardsRow.innerHTML = '';
   cards.forEach(val => {
     const btn = document.createElement('button');

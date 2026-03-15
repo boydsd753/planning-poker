@@ -36,6 +36,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (req, res) => res.sendStatus(200));
+app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy.html')));
 
 // ── Jira OAuth ──────────────────────────────────────────────────────────────
 const jiraSessions = {}; // sessionId → { accessToken, cloudId, domain }
@@ -454,6 +455,8 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room-update', room);
   });
 });
+
+app.use((req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => { console.log(`\n  Planning Poker → http://localhost:${PORT}\n`); });

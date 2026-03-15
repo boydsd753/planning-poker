@@ -1,0 +1,17 @@
+{
+  "name": "Planning Poker Pro",
+  "short_name": "Poker Pro",
+  "description": "Free planning poker for agile teams",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08112e",
+  "theme_color": "#3448ff",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

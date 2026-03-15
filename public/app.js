@@ -21,6 +21,73 @@ function cardDisplay(val) {
   return val === '☕' ? ICON_BREAK : escHtml(val);
 }
 
+// ── Custom dropdowns & segmented controls ────────────────────────────────
+const ICON_CHECK   = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>`;
+
+function initCustomSelect(cs) {
+  const nativeSel = document.getElementById(cs.dataset.for);
+  if (!nativeSel) return;
+  const trigger  = cs.querySelector('.csel-trigger');
+  const valueEl  = cs.querySelector('.csel-value');
+  const dropdown = cs.querySelector('.csel-dropdown');
+
+  function render() {
+    dropdown.innerHTML = '';
+    Array.from(nativeSel.options).forEach(opt => {
+      const li = document.createElement('li');
+      li.className = 'csel-option' + (opt.value === nativeSel.value ? ' selected' : '');
+      li.dataset.value = opt.value;
+      li.innerHTML = `
+        <div class="csel-opt-content">
+          <span class="csel-opt-label">${opt.dataset.label || opt.text}</span>
+          ${opt.dataset.sub ? `<span class="csel-opt-sub">${opt.dataset.sub}</span>` : ''}
+        </div>
+        <span class="csel-check">${ICON_CHECK}</span>`;
+      li.addEventListener('mousedown', e => {
+        e.preventDefault();
+        nativeSel.value = opt.value;
+        valueEl.textContent = opt.dataset.label || opt.text;
+        dropdown.querySelectorAll('.csel-option').forEach(o =>
+          o.classList.toggle('selected', o.dataset.value === opt.value));
+        closeDropdown();
+      });
+      dropdown.appendChild(li);
+    });
+    const sel = nativeSel.options[nativeSel.selectedIndex];
+    if (sel) valueEl.textContent = sel.dataset.label || sel.text;
+  }
+
+  function openDropdown() { render(); dropdown.classList.remove('hidden'); trigger.classList.add('open'); }
+  function closeDropdown() { dropdown.classList.add('hidden'); trigger.classList.remove('open'); }
+
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    dropdown.classList.contains('hidden') ? openDropdown() : closeDropdown();
+  });
+  render();
+}
+
+function initSegControl(sc) {
+  const nativeSel = document.getElementById(sc.dataset.for);
+  if (!nativeSel) return;
+  sc.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sc.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      nativeSel.value = btn.dataset.value;
+    });
+  });
+}
+
+document.querySelectorAll('.custom-select').forEach(initCustomSelect);
+document.querySelectorAll('.seg-control').forEach(initSegControl);
+document.addEventListener('click', () => {
+  document.querySelectorAll('.csel-dropdown:not(.hidden)').forEach(d => {
+    d.classList.add('hidden');
+    d.closest('.custom-select')?.querySelector('.csel-trigger')?.classList.remove('open');
+  });
+});
+
 // DOM
 const screenLanding    = $('screen-landing');
 const screenGame       = $('screen-game');
@@ -174,6 +241,7 @@ btnCreate.addEventListener('click', () => {
   const name = inpName.value.trim();
   if (!name) { landingError.textContent = 'Please enter your name.'; return; }
   landingError.textContent = '';
+  if (!socket.connected) socket.connect();
   socket.emit('create-room', { name, settings: getSettings(), role: selRole.value });
 });
 
@@ -184,6 +252,7 @@ btnJoin.addEventListener('click', () => {
   if (!name) { landingError.textContent = 'Please enter your name.'; return; }
   if (!code) { landingError.textContent = 'Please enter a room code.'; return; }
   landingError.textContent = '';
+  if (!socket.connected) socket.connect();
   socket.emit('join-room', { name, roomCode: code, isSpectator, role: selRole.value });
 });
 
@@ -199,6 +268,7 @@ $('btn-home').addEventListener('click', () => {
   socket.disconnect();
   myRoom = null; myId = null; currentRoom = null;
   wasRevealed = false; wasAdmin = false; prevPlayerIds = [];
+  window.history.replaceState({}, '', '/');
   showScreen('landing');
 });
 

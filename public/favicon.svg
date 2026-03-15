@@ -1,6 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#1e293b"/>
-  <rect x="5" y="4" width="22" height="24" rx="3" fill="#ffffff"/>
-  <text x="9" y="14" font-family="serif" font-size="9" font-weight="bold" fill="#1e293b">A</text>
-  <text x="10" y="22" font-family="serif" font-size="10" fill="#e11d48">♥</text>
+  <!-- Nearmap Blue background with rounded corners -->
+  <rect width="32" height="32" rx="7" fill="#3448ff"/>
+  <!-- Subtle inner highlight for depth -->
+  <rect width="32" height="16" rx="7" fill="url(#shine)"/>
+  <defs>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Card body: white glass -->
+  <rect x="6" y="5" width="20" height="22" rx="3" fill="#ffffff" opacity="0.95"/>
+  <!-- Top-left A -->
+  <text x="9" y="14" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="8" font-weight="800" fill="#3448ff">A</text>
+  <!-- Center suit: spade in Nearmap Dark -->
+  <text x="9.5" y="23" font-family="serif" font-size="11" fill="#08112e">♠</text>
 </svg>

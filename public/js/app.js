@@ -535,9 +535,21 @@ socket.on('reaction', ({ playerId, emoji }) => {
   if (!seat) return;
   const el = document.createElement('div');
   el.className = 'floating-reaction';
-  if (emoji === 'sergio' || emoji === 'danan' || emoji === 'parrot') {
+  const CUSTOM_REACTION_IMGS = {
+    sergio:      'images/SergioHead.png',
+    danan:       'images/DananHead.png',
+    parrot:      'images/christmas_parrot.gif',
+    party_blob:  'images/party_blob.gif',
+    elmo_money:  'images/elmo-money.gif',
+    this_is_fine:'images/this_is_fine.gif',
+    spongebob:   'images/spongebob1q.gif',
+    smart:       'images/smart.gif',
+    rage:        'images/rage.jpg',
+    success:     'images/success.png',
+  };
+  if (CUSTOM_REACTION_IMGS[emoji]) {
     const img = document.createElement('img');
-    img.src = emoji === 'sergio' ? 'images/SergioHead.png' : emoji === 'danan' ? 'images/DananHead.png' : 'images/christmas_parrot.gif';
+    img.src = CUSTOM_REACTION_IMGS[emoji];
     img.style.cssText = 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
     el.appendChild(img);
   } else {

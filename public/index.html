@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Planning Poker</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -118,9 +121,9 @@
         <div class="timer-wrap" id="timer-wrap">
           <span id="timer-display" class="timer-display">00:00</span>
           <div class="timer-controls" id="timer-controls">
-            <button id="btn-timer-start"  class="timer-btn" title="Start">▶</button>
-            <button id="btn-timer-pause"  class="timer-btn hidden" title="Pause">⏸</button>
-            <button id="btn-timer-reset"  class="timer-btn" title="Reset">↺</button>
+            <button id="btn-timer-start"  class="timer-btn" title="Start"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M4.5 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" clip-rule="evenodd"/></svg></button>
+            <button id="btn-timer-pause"  class="timer-btn hidden" title="Pause"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd"/></svg></button>
+            <button id="btn-timer-reset"  class="timer-btn" title="Reset"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg></button>
           </div>
         </div>
         <span id="vote-tally" class="vote-tally"></span>
@@ -141,7 +144,7 @@
 
         <!-- Dev Team -->
         <div class="team-area" id="dev-area">
-          <div class="team-label dev-label">👨‍💻 Dev</div>
+          <div class="team-label dev-label">Dev</div>
           <div class="poker-table" id="dev-poker-table">
             <div class="table-surface">
               <div class="table-center-content" id="dev-center-content">
@@ -187,7 +190,7 @@
 
         <!-- QA Team -->
         <div class="team-area" id="qa-area">
-          <div class="team-label qa-label">🧪 QA</div>
+          <div class="team-label qa-label">QA</div>
           <div class="poker-table" id="qa-poker-table">
             <div class="table-surface">
               <div class="table-center-content" id="qa-center-content">
@@ -241,13 +244,13 @@
       <aside class="issues-sidebar" id="issues-sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">Issues</span>
-          <button id="btn-sidebar-close" class="btn-icon" title="Close">✕</button>
+          <button id="btn-sidebar-close" class="btn-icon" title="Close"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
         </div>
         <ul class="issue-list" id="issue-list"></ul>
         <div id="jira-estimate-panel" class="jira-estimate-panel hidden"></div>
         <div class="add-issue-row">
           <input id="inp-issue" type="text" placeholder="Add an issue…" maxlength="200" class="issue-input">
-          <button id="btn-add-issue" class="btn-add-issue">+</button>
+          <button id="btn-add-issue" class="btn-add-issue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
         </div>
         <button id="btn-jira-import" class="btn-jira-import">Import from Jira</button>
       </aside>
@@ -271,7 +274,7 @@
     <div class="modal-box">
       <div class="modal-header">
         <span class="modal-title">Transfer Host</span>
-        <button id="btn-transfer-cancel" class="btn-icon">✕</button>
+        <button id="btn-transfer-cancel" class="btn-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
       </div>
       <p class="modal-hint">Select a player to become the new host:</p>
       <ul id="transfer-player-list" class="transfer-list"></ul>
@@ -282,8 +285,8 @@
   <div id="jira-modal" class="modal-backdrop hidden">
     <div class="modal-box jira-modal-box">
       <div class="modal-header">
-        <span class="modal-title">🔗 Import from Jira</span>
-        <button id="btn-jira-cancel" class="btn-icon">✕</button>
+        <span class="modal-title">Import from Jira</span>
+        <button id="btn-jira-cancel" class="btn-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
       </div>
 
       <div class="jira-step" id="jira-step-project">

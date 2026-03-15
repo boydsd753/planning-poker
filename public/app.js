@@ -10,6 +10,16 @@ const DECKS = {
 
 const $ = id => document.getElementById(id);
 
+// Heroicons SVGs
+const ICON_STAR     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="11" height="11" style="vertical-align:-1px"><path fill-rule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401Z" clip-rule="evenodd"/></svg>`;
+const ICON_EYE      = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14" style="vertical-align:-2px"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>`;
+const ICON_BREAK    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>`;
+const ICON_SPARKLES = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16" style="vertical-align:-3px"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg>`;
+
+function cardDisplay(val) {
+  return val === '☕' ? ICON_BREAK : escHtml(val);
+}
+
 // DOM
 const screenLanding    = $('screen-landing');
 const screenGame       = $('screen-game');
@@ -111,7 +121,7 @@ socket.on('room-update', (room) => {
   wasRevealed = room.revealed;
 
   const me = Object.values(room.players).find(p => p.id === myId);
-  if (me?.isAdmin && !wasAdmin && currentRoom) showToast('You are now the host ★', 'host');
+  if (me?.isAdmin && !wasAdmin && currentRoom) showToast(`You are now the host ${ICON_STAR}`, 'host');
   wasAdmin = me?.isAdmin || false;
 
   // Toast notifications for join/leave
@@ -119,11 +129,11 @@ socket.on('room-update', (room) => {
   if (currentRoom) {
     const oldIds = prevPlayerIds;
     newIds.filter(id => !oldIds.includes(id) && id !== myId).forEach(id => {
-      showToast(`${room.players[id]?.name || 'Someone'} joined`, 'join');
+      showToast(`${escHtml(room.players[id]?.name || 'Someone')} joined`, 'join');
     });
     oldIds.filter(id => !newIds.includes(id)).forEach(id => {
       const name = currentRoom.players[id]?.name || 'Someone';
-      showToast(`${name} left`, 'leave');
+      showToast(`${escHtml(name)} left`, 'leave');
     });
   }
   prevPlayerIds = newIds;
@@ -201,7 +211,7 @@ btnTransferHost.addEventListener('click', () => {
   players.forEach(p => {
     const li = document.createElement('li');
     li.className = 'transfer-item';
-    li.innerHTML = `<div class="transfer-item-avatar">${getInitials(p.name)}</div><span>${p.name}${p.isSpectator ? ' 👁' : ''} <small style="color:var(--muted)">(${p.role})</small></span>`;
+    li.innerHTML = `<div class="transfer-item-avatar">${getInitials(p.name)}</div><span>${escHtml(p.name)}${p.isSpectator ? ` ${ICON_EYE}` : ''} <small style="color:var(--muted)">(${p.role})</small></span>`;
     li.addEventListener('click', () => {
       socket.emit('transfer-host', { toId: p.id });
       transferModal.classList.add('hidden');
@@ -299,7 +309,7 @@ function doCountdown(callback) {
 function showToast(msg, type = 'info') {
   const t = document.createElement('div');
   t.className = `toast ${type}`;
-  t.textContent = msg;
+  t.innerHTML = msg;
   toastsEl.appendChild(t);
   requestAnimationFrame(() => { requestAnimationFrame(() => t.classList.add('show')); });
   setTimeout(() => {
@@ -393,7 +403,7 @@ function renderCardPicker(revealed, me, deckKey) {
   cards.forEach(val => {
     const btn = document.createElement('button');
     btn.className = 'pick-card';
-    btn.textContent = val;
+    btn.innerHTML = cardDisplay(val);
     if (me?.card === val) btn.classList.add('selected');
     if (revealed) btn.disabled = true;
     btn.addEventListener('click', () => { if (!revealed) socket.emit('select-card', { card: val }); });
@@ -459,14 +469,14 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
 
     const back = document.createElement('div');
     back.className = (!isSpec && hasVoted) ? 'card-face card-back' : 'card-face card-empty';
-    if (isSpec) back.textContent = '👁';
+    if (isSpec) back.innerHTML = ICON_EYE;
     else if (!hasVoted) back.textContent = '·';
 
     const front = document.createElement('div');
     front.className = 'card-face card-front';
     if (revealed && hasVoted && !isSpec) {
       const v = player.card;
-      front.innerHTML = `<span class="cv-center">${v}</span>`;
+      front.innerHTML = `<span class="cv-center">${cardDisplay(v)}</span>`;
     }
 
     inner.appendChild(back);
@@ -478,14 +488,14 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
       (isMe ? ' is-me' : '') +
       (player.isAdmin ? ' is-admin' : '') +
       (isSpec ? ' is-spectator' : '');
-    avatar.textContent = isSpec ? '👁' : getInitials(player.name);
+    if (isSpec) { avatar.innerHTML = ICON_EYE; } else { avatar.textContent = getInitials(player.name); }
     avatar.title = (player.isAdmin ? '(host) ' : '') + player.name;
 
     const nameEl = document.createElement('div');
     nameEl.className = 'player-name' + (isMe ? ' is-me' : '') + (isSpec ? ' is-spectator' : '');
-    nameEl.textContent = isMe
-      ? `${player.name} (You)`
-      : player.name + (player.isAdmin ? ' ★' : '') + (isSpec ? ' 👁' : '');
+    nameEl.innerHTML = isMe
+      ? `${escHtml(player.name)} (You)`
+      : escHtml(player.name) + (player.isAdmin ? ` ${ICON_STAR}` : '') + (isSpec ? ` ${ICON_EYE}` : '');
 
     seat.appendChild(wrap);
     seat.appendChild(avatar);
@@ -546,8 +556,8 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
   if (allSame) {
     el.innerHTML = `
       <div class="stats-wrap">
-        <span class="stat-consensus">🎉 Consensus!</span>
-        <span class="stat-avg">${allCards[0]}</span>
+        <span class="stat-consensus">${ICON_SPARKLES} Consensus!</span>
+        <span class="stat-avg">${cardDisplay(allCards[0])}</span>
         <span class="stat-label">Everyone agreed</span>
       </div>`;
     return;
@@ -572,8 +582,8 @@ function renderResults(players, settings, room) {
   const devPlayers = players.filter(p => p.role === 'dev');
   const qaPlayers  = players.filter(p => p.role === 'qa');
 
-  const devHtml = buildTeamResults(devPlayers, settings, room, 'dev', '👨‍💻 Dev Team');
-  const qaHtml  = buildTeamResults(qaPlayers,  settings, room, 'qa',  '🧪 QA Team');
+  const devHtml = buildTeamResults(devPlayers, settings, room, 'dev', 'Dev Team');
+  const qaHtml  = buildTeamResults(qaPlayers,  settings, room, 'qa',  'QA Team');
 
   resultsContent.innerHTML = `<div class="results-teams"><div class="results-team">${devHtml}</div><div class="results-team">${qaHtml}</div></div>`;
 
@@ -602,7 +612,7 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
     const avgStr = avg % 1 === 0 ? String(avg) : avg.toFixed(1);
 
     if (allSame) {
-      statsHtml = `<div class="results-stats"><span class="results-consensus">🎉 Consensus! — ${allCards[0]}</span></div>`;
+      statsHtml = `<div class="results-stats"><span class="results-consensus">${ICON_SPARKLES} Consensus! — ${cardDisplay(allCards[0])}</span></div>`;
     } else {
       const avgPart = settings?.showAverage !== false ? `<span class="results-avg">Avg: ${avgStr}</span>` : '';
       statsHtml = `<div class="results-stats">${avgPart}<span class="results-range">Range: ${min} – ${max}</span></div>`;
@@ -636,7 +646,7 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
               <div class="vote-bar-fill${isWinner ? ' winner' : ''}" style="height:${pct}%"></div>
             </div>
           </div>
-          <div class="vote-card-mini${isWinner ? ' highlight' : ''}">${val}</div>
+          <div class="vote-card-mini${isWinner ? ' highlight' : ''}">${cardDisplay(val)}</div>
           <div class="vote-names">${label}</div>
         </div>`;
     }).join('');
@@ -735,10 +745,10 @@ function renderEstimatePanel(room, isAdmin) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
         saveBtn.textContent = '✓ Saved!';
-        showToast(`Saved estimates to ${activeIssue.jiraKey}`, 'join');
+        showToast(`Saved estimates to ${escHtml(activeIssue.jiraKey)}`, 'join');
         setTimeout(() => { if (saveBtn) { saveBtn.textContent = 'Save to Jira'; saveBtn.disabled = false; } }, 2500);
       } catch (err) {
-        showToast(`Save failed: ${err.message}`, 'leave');
+        showToast(`Save failed: ${escHtml(err.message)}`, 'leave');
         saveBtn.textContent = 'Save to Jira';
         saveBtn.disabled = false;
       }
@@ -766,7 +776,7 @@ function renderIssues(issues, activeId) {
     li.innerHTML = `
       <span class="issue-title">${escHtml(issue.title)}</span>
       ${estHtml}
-      <button class="issue-delete" title="Delete">✕</button>`;
+      <button class="issue-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>`;
     li.querySelector('.issue-title').addEventListener('click', () => {
       socket.emit('set-active-issue', { id: issue.id });
     });
@@ -813,9 +823,9 @@ btnLinkJira.addEventListener('click', () => {
       localStorage.setItem('jiraSession', jiraSession);
       localStorage.setItem('jiraDomain',  jiraDomain);
       updateJiraButton(true);
-      showToast(`Jira linked: ${jiraDomain}`, 'join');
+      showToast(`Jira linked: ${escHtml(jiraDomain)}`, 'join');
     } else if (e.data.jiraError) {
-      showToast(`Jira error: ${e.data.jiraError}`, 'leave');
+      showToast(`Jira error: ${escHtml(e.data.jiraError)}`, 'leave');
     }
     window.removeEventListener('message', onMsg);
   };
@@ -1021,7 +1031,7 @@ function renderIssueList(ul, issues) {
       li.classList.add('jira-imported');
       li.style.opacity = '0.45';
       li.style.pointerEvents = 'none';
-      showToast(`Added: ${issue.key}`, 'info');
+      showToast(`Added: ${escHtml(issue.key)}`, 'info');
     });
     ul.appendChild(li);
   });

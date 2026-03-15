@@ -1339,7 +1339,7 @@ input[type=text]:focus, .select-input:focus {
   .table-lonely-hint { font-size: 9px; }
 
   /* ── Sidebar: full-screen overlay on mobile ── */
-  .sidebar-jira-btn { display: block; }
+  .sidebar-jira-btn { display: block !important; }
   .issues-sidebar.open {
     position: fixed;
     inset: 0;
@@ -1347,6 +1347,7 @@ input[type=text]:focus, .select-input:focus {
     z-index: 50;
     border-left: none;
     border-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom, 16px);
   }
 
   /* ── Card picker: very compact ── */

@@ -219,7 +219,7 @@ module.exports = function registerHandlers(io) {
     });
 
     // ── Reactions ──────────────────────────────────────────────────────────────
-    const ALLOWED_REACTIONS = new Set(['👍','👎','❤️','😂','😮','🤔','☕','🎉','sergio','danan']);
+    const ALLOWED_REACTIONS = new Set(['👍','👎','❤️','😂','😮','🤔','☕','🎉','sergio','danan','parrot']);
     socket.on('react', ({ emoji }) => {
       if (!ALLOWED_REACTIONS.has(emoji)) return;
       if (!socket.roomCode) return;

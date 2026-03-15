@@ -535,9 +535,9 @@ socket.on('reaction', ({ playerId, emoji }) => {
   if (!seat) return;
   const el = document.createElement('div');
   el.className = 'floating-reaction';
-  if (emoji === 'sergio' || emoji === 'danan') {
+  if (emoji === 'sergio' || emoji === 'danan' || emoji === 'parrot') {
     const img = document.createElement('img');
-    img.src = emoji === 'sergio' ? 'images/SergioHead.png' : 'images/DananHead.png';
+    img.src = emoji === 'sergio' ? 'images/SergioHead.png' : emoji === 'danan' ? 'images/DananHead.png' : 'images/christmas_parrot.gif';
     img.style.cssText = 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
     el.appendChild(img);
   } else {

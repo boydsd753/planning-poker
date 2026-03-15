@@ -95,6 +95,47 @@ document.addEventListener('click', () => {
   });
 });
 
+// ── Avatar picker ────────────────────────────────────────────────────────────
+let myAvatar = null; // base64 JPEG string or null
+
+(function initAvatarPicker() {
+  const preview   = $('avatar-preview');
+  const img       = $('avatar-preview-img');
+  const label     = $('avatar-pick-label');
+  const fileInput = $('inp-avatar');
+  if (!preview || !fileInput) return;
+
+  preview.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const srcImg = new Image();
+      srcImg.onload = () => {
+        const SIZE = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = SIZE; canvas.height = SIZE;
+        const ctx = canvas.getContext('2d');
+        // Crop to square from center
+        const s = Math.min(srcImg.width, srcImg.height);
+        const ox = (srcImg.width  - s) / 2;
+        const oy = (srcImg.height - s) / 2;
+        ctx.drawImage(srcImg, ox, oy, s, s, 0, 0, SIZE, SIZE);
+        myAvatar = canvas.toDataURL('image/jpeg', 0.82);
+        img.src = myAvatar;
+        img.classList.remove('hidden');
+        preview.classList.add('has-image');
+        if (label) label.textContent = 'Change';
+      };
+      srcImg.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = ''; // allow re-selecting same file
+  });
+})();
+
 // DOM
 const screenLanding    = $('screen-landing');
 const screenGame       = $('screen-game');
@@ -256,7 +297,7 @@ function toggleValue(btn) {
   btn.setAttribute('aria-pressed', String(on));
   return on;
 }
-[togAutoReveal, togShowAvg, togCountdown, togSpectator].forEach(btn => {
+[togAutoReveal, togShowAvg, togCountdown, togSpectator, $('tog-timer-auto-reveal')].filter(Boolean).forEach(btn => {
   btn.addEventListener('click', () => toggleValue(btn));
 });
 
@@ -349,7 +390,7 @@ btnCreate.addEventListener('click', () => {
   if (!name) { landingError.textContent = 'Please enter your name.'; return; }
   landingError.textContent = '';
   if (!socket.connected) socket.connect();
-  socket.emit('create-room', { name, settings: getSettings(), role: selRole.value });
+  socket.emit('create-room', { name, settings: getSettings(), role: selRole.value, avatar: myAvatar });
 });
 
 btnJoin.addEventListener('click', () => {
@@ -360,7 +401,7 @@ btnJoin.addEventListener('click', () => {
   if (!code) { landingError.textContent = 'Please enter a room code.'; return; }
   landingError.textContent = '';
   if (!socket.connected) socket.connect();
-  socket.emit('join-room', { name, roomCode: code, isSpectator, role: selRole.value });
+  socket.emit('join-room', { name, roomCode: code, isSpectator, role: selRole.value, avatar: myAvatar });
 });
 
 inpName.addEventListener('keydown', e => {
@@ -473,7 +514,7 @@ function syncTimer(timer) {
       clearInterval(timerInterval);
       // Auto-reveal when timer hits zero (host only)
       if (wasAdmin && currentRoom?.settings?.timerAutoReveal && !currentRoom?.revealed) {
-        socket.emit('reveal');
+        socket.emit('reveal-cards');
       }
     }
   };
@@ -741,7 +782,16 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
       (isMe ? ' is-me' : '') +
       (player.isAdmin ? ' is-admin' : '') +
       (isSpec ? ' is-spectator' : '');
-    if (isSpec) { avatar.innerHTML = ICON_EYE; } else { avatar.textContent = getInitials(player.name); }
+    if (isSpec) {
+      avatar.innerHTML = ICON_EYE;
+    } else if (player.avatar) {
+      const avatarImg = document.createElement('img');
+      avatarImg.src = player.avatar;
+      avatarImg.alt = player.name;
+      avatar.appendChild(avatarImg);
+    } else {
+      avatar.textContent = getInitials(player.name);
+    }
     avatar.title = (player.isAdmin ? '(host) ' : '') + player.name;
 
     const nameEl = document.createElement('div');

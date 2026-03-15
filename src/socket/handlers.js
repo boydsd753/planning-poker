@@ -9,7 +9,14 @@ module.exports = function registerHandlers(io) {
   io.on('connection', (socket) => {
     console.log(`[connect]    ${socket.id}`);
 
-    socket.on('create-room', ({ name, settings, role }) => {
+    function sanitizeAvatar(raw) {
+      if (typeof raw !== 'string') return null;
+      if (!raw.startsWith('data:image/')) return null;
+      if (raw.length > 30000) return null; // ~22KB decoded, enough for 64x64 JPEG
+      return raw;
+    }
+
+    socket.on('create-room', ({ name, settings, role, avatar }) => {
       let roomCode;
       do { roomCode = generateRoomCode(); } while (rooms[roomCode]);
 
@@ -27,6 +34,7 @@ module.exports = function registerHandlers(io) {
       rooms[roomCode].players[socket.id] = {
         id: socket.id,
         name: String(name).trim().slice(0, 20) || 'Anonymous',
+        avatar: sanitizeAvatar(avatar),
         card: null,
         isAdmin: true,
         isSpectator: false,
@@ -40,7 +48,7 @@ module.exports = function registerHandlers(io) {
       console.log(`[create]     ${socket.id} created ${roomCode}`);
     });
 
-    socket.on('join-room', ({ name, roomCode, isSpectator, role }) => {
+    socket.on('join-room', ({ name, roomCode, isSpectator, role, avatar }) => {
       const code = String(roomCode).toUpperCase().trim();
       const room = rooms[code];
       if (!room) { socket.emit('error-msg', 'Room not found. Check the code and try again.'); return; }
@@ -48,6 +56,7 @@ module.exports = function registerHandlers(io) {
       room.players[socket.id] = {
         id: socket.id,
         name: String(name).trim().slice(0, 20) || 'Anonymous',
+        avatar: sanitizeAvatar(avatar),
         card: null,
         isAdmin: false,
         isSpectator: Boolean(isSpectator),

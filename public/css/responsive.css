@@ -43,6 +43,8 @@
   .csel-opt-label { font-size: 13px; }
   .tab-panel { gap: 10px; }
   .btn-primary { padding: 11px; font-size: 14px; }
+  .avatar-preview { width: 46px; height: 46px; }
+  #avatar-preview-initials { font-size: 15px; }
 
   /* ── Header: ultra-compact single row ── */
   .game-header { flex-wrap: nowrap; padding: 5px 10px; gap: 4px; }

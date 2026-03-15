@@ -901,7 +901,7 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
 
 // ── Jira Estimate Panel ────────────────────────────────────────────────────
 const jiraEstimatePanel = $('jira-estimate-panel');
-let jiraEst = { dev: '', qa: '', original: '' };
+const jiraEstMap = {}; // issueId → { dev, qa, original }
 let jiraEstIssueId = null;
 
 function getTopVote(teamPlayers) {
@@ -920,11 +920,15 @@ function renderEstimatePanel(room, isAdmin) {
     return;
   }
 
-  // Reset estimates when active issue changes
-  if (jiraEstIssueId !== activeIssue.id) {
-    jiraEstIssueId = activeIssue.id;
-    jiraEst = { dev: '', qa: '', original: '' };
+  jiraEstIssueId = activeIssue.id;
+  if (!jiraEstMap[activeIssue.id]) {
+    jiraEstMap[activeIssue.id] = {
+      dev:      activeIssue.devEstimate      || '',
+      qa:       activeIssue.qaEstimate       || '',
+      original: activeIssue.originalEstimate || '',
+    };
   }
+  const jiraEst = jiraEstMap[activeIssue.id];
 
   // Auto-populate from votes when revealed
   if (room.revealed) {
@@ -987,6 +991,9 @@ function renderEstimatePanel(room, isAdmin) {
         if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
         saveBtn.textContent = '✓ Saved!';
         showToast(`Saved estimates to ${escHtml(activeIssue.jiraKey)}`, 'join');
+        socket.emit('mark-issue-estimated', { id: activeIssue.id });
+        socket.emit('save-team-estimate', { id: activeIssue.id, team: 'dev', estimate: jiraEst.dev });
+        socket.emit('save-team-estimate', { id: activeIssue.id, team: 'qa',  estimate: jiraEst.qa });
         setTimeout(() => { if (saveBtn) { saveBtn.textContent = 'Save to Jira'; saveBtn.disabled = false; } }, 2500);
       } catch (err) {
         showToast(`Save failed: ${escHtml(err.message)}`, 'leave');
@@ -1005,7 +1012,7 @@ function renderIssues(issues, activeId) {
   }
   issues.forEach(issue => {
     const li = document.createElement('li');
-    li.className = 'issue-item' + (issue.id === activeId ? ' active' : '');
+    li.className = 'issue-item' + (issue.id === activeId ? ' active' : '') + (issue.savedToJira ? ' estimated' : '');
 
     let estHtml = '';
     if (issue.devEstimate || issue.qaEstimate) {
@@ -1014,7 +1021,12 @@ function renderIssues(issues, activeId) {
       estHtml = `<span class="issue-estimates">${d}${q}</span>`;
     }
 
+    const savedBadge = issue.savedToJira
+      ? `<span class="issue-saved-badge" title="Saved to Jira"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg></span>`
+      : '';
+
     li.innerHTML = `
+      ${savedBadge}
       <span class="issue-title">${escHtml(issue.title)}</span>
       ${estHtml}
       <button class="issue-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>`;
@@ -1097,6 +1109,10 @@ const stepFilter       = $('jira-step-filter');
 // Searchable project dropdown state
 let allProjects = [];
 let selectedProjectKey = '';
+let allFetchedIssues = [];
+
+// Active client-side filter state
+let activeFilters = { search: '', types: new Set(), versions: new Set(), labels: new Set(), priorities: new Set() };
 
 async function jiraGet(url) {
   const res = await fetch(url, { headers: { 'x-jira-session': jiraSession || '' }, cache: 'no-store' });
@@ -1121,7 +1137,7 @@ function renderProjectDropdown(filter) {
       li.dataset.key = p.key;
       li.dataset.name = p.name;
       li.addEventListener('mousedown', e => {
-        e.preventDefault(); // prevent blur before click
+        e.preventDefault();
         selectProject(p.key, `${p.key} — ${p.name}`);
       });
       projectDropdown.appendChild(li);
@@ -1135,8 +1151,7 @@ function selectProject(key, label) {
   inpJiraProject.value = label;
   projectDropdown.classList.add('hidden');
   stepFilter.classList.remove('hidden');
-  btnJiraFetch.disabled = false;
-  btnJiraFetch.click();
+  doFetch();
 }
 
 inpJiraProject.addEventListener('focus', () => {
@@ -1146,7 +1161,6 @@ inpJiraProject.addEventListener('focus', () => {
 inpJiraProject.addEventListener('input', () => {
   selectedProjectKey = '';
   stepFilter.classList.add('hidden');
-  btnJiraFetch.disabled = true;
   jiraResults.classList.add('hidden');
   renderProjectDropdown(inpJiraProject.value);
 });
@@ -1155,19 +1169,41 @@ inpJiraProject.addEventListener('blur', () => {
   setTimeout(() => projectDropdown.classList.add('hidden'), 150);
 });
 
+// Scope tab buttons
+document.querySelectorAll('.jira-scope-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.jira-scope-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // sync hidden select
+    selJiraFilter.value = btn.dataset.scope;
+    if (selectedProjectKey) doFetch();
+  });
+});
+
 btnJiraImport.addEventListener('click', async () => {
   if (!jiraSession) { showToast('Link your Jira account first (top-right)', 'info'); return; }
+  jiraModal.classList.remove('hidden');
+
+  // If already loaded, just reopen where we left off
+  if (selectedProjectKey && allFetchedIssues.length) {
+    if (allFetchedIssues.length) renderIssueResults();
+    return;
+  }
+
+  // First open — load projects
   jiraResults.innerHTML = '';
   jiraResults.classList.add('hidden');
   stepFilter.classList.add('hidden');
-  btnJiraFetch.disabled = true;
   allProjects = [];
+  allFetchedIssues = [];
+  activeFilters = { search: '', types: new Set(), versions: new Set(), labels: new Set(), priorities: new Set() };
   selectedProjectKey = '';
   inpJiraProject.value = '';
   inpJiraProject.placeholder = 'Loading projects…';
   inpJiraProject.disabled = true;
   projectDropdown.classList.add('hidden');
-  jiraModal.classList.remove('hidden');
+  document.querySelectorAll('.jira-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === 'backlog'));
+  selJiraFilter.value = 'backlog';
 
   try {
     const { projects } = await jiraGet('/api/jira/projects');
@@ -1181,87 +1217,166 @@ btnJiraImport.addEventListener('click', async () => {
   }
 });
 
-selJiraFilter.addEventListener('change', () => {
-  if (selectedProjectKey) btnJiraFetch.click();
-});
-
+btnJiraFetch.addEventListener('click', doFetch);
 btnJiraCancel.addEventListener('click', () => jiraModal.classList.add('hidden'));
 jiraModal.addEventListener('click', e => { if (e.target === jiraModal) jiraModal.classList.add('hidden'); });
 
-// All fetched issues (for client-side search)
-let allFetchedIssues = [];
-
-btnJiraFetch.addEventListener('click', async () => {
-  const projectKey = selectedProjectKey;
-  if (!projectKey) return;
-  btnJiraFetch.textContent = 'Fetching…';
-  btnJiraFetch.disabled = true;
-  jiraResults.innerHTML = '';
-  jiraResults.classList.add('hidden');
-  allFetchedIssues = [];
-
-  const filter = selJiraFilter?.value || 'all';
-  const issueUrl = `/api/jira/issues?projectKey=${encodeURIComponent(projectKey)}&filter=${encodeURIComponent(filter)}`;
-
-  try {
-    const data = await jiraGet(issueUrl);
-    allFetchedIssues = data.issues || [];
-    renderIssueResults(allFetchedIssues);
-  } catch (err) {
-    jiraResults.innerHTML = `<p class="jira-error">${escHtml(err.message)}</p>`;
-    jiraResults.classList.remove('hidden');
-  } finally {
-    btnJiraFetch.textContent = 'Fetch Issues';
-    btnJiraFetch.disabled = false;
-  }
+// Close filter dropdowns when clicking outside them
+document.addEventListener('click', () => {
+  document.querySelectorAll('.jira-filter-csel .csel-dropdown').forEach(d => d.classList.add('hidden'));
+  document.querySelectorAll('.jira-filter-csel .csel-trigger').forEach(t => t.classList.remove('open'));
 });
 
-function renderIssueResults(issues) {
+async function doFetch() {
+  const projectKey = selectedProjectKey;
+  if (!projectKey) return;
+  jiraResults.innerHTML = '<p class="jira-fetching">Fetching issues…</p>';
+  jiraResults.classList.remove('hidden');
+  allFetchedIssues = [];
+  activeFilters = { search: '', types: new Set(), versions: new Set(), labels: new Set(), priorities: new Set() };
+
+  const filter = selJiraFilter?.value || 'backlog';
+  try {
+    const data = await jiraGet(`/api/jira/issues?projectKey=${encodeURIComponent(projectKey)}&filter=${encodeURIComponent(filter)}`);
+    allFetchedIssues = data.issues || [];
+    renderIssueResults();
+  } catch (err) {
+    jiraResults.innerHTML = `<p class="jira-error">${escHtml(err.message)}</p>`;
+  }
+}
+
+function applyFilters() {
+  return allFetchedIssues.filter(i => {
+    const q = activeFilters.search;
+    if (q && !i.key.toLowerCase().includes(q) && !i.title.toLowerCase().includes(q) && !i.status.toLowerCase().includes(q)) return false;
+    if (activeFilters.types.size    && !activeFilters.types.has(i.type)) return false;
+    if (activeFilters.versions.size && !i.fixVersions.some(v => activeFilters.versions.has(v))) return false;
+    if (activeFilters.labels.size   && !i.labels.some(l => activeFilters.labels.has(l))) return false;
+    if (activeFilters.priorities.size && !activeFilters.priorities.has(i.priority)) return false;
+    return true;
+  });
+}
+
+function renderIssueResults() {
   jiraResults.innerHTML = '';
 
-  if (!issues.length && !allFetchedIssues.length) {
+  if (!allFetchedIssues.length) {
     jiraResults.innerHTML = '<p class="jira-empty">No issues found.</p>';
     jiraResults.classList.remove('hidden');
     return;
   }
 
-  // Search input
-  const searchWrap = document.createElement('div');
-  searchWrap.className = 'jira-issue-search-wrap';
+  // Extract unique values from fetched issues
+  const types      = [...new Set(allFetchedIssues.map(i => i.type).filter(Boolean))].sort();
+  const versions   = [...new Set(allFetchedIssues.flatMap(i => i.fixVersions))].sort();
+  const labels     = [...new Set(allFetchedIssues.flatMap(i => i.labels))].sort();
+  const priorities = [...new Set(allFetchedIssues.map(i => i.priority).filter(Boolean))].sort();
+
+  // Search
   const searchInp = document.createElement('input');
   searchInp.type = 'text';
   searchInp.className = 'jira-issue-search';
   searchInp.placeholder = 'Search issues…';
   searchInp.autocomplete = 'off';
+  searchInp.value = activeFilters.search;
   searchInp.addEventListener('input', () => {
-    const q = searchInp.value.toLowerCase();
-    const filtered = allFetchedIssues.filter(i =>
-      i.key.toLowerCase().includes(q) || i.title.toLowerCase().includes(q) || i.status.toLowerCase().includes(q)
-    );
-    renderIssueList(ul, filtered);
-    hint.textContent = buildHintText(filtered.length, allFetchedIssues.length);
+    activeFilters.search = searchInp.value.toLowerCase();
+    refreshList();
   });
-  searchWrap.appendChild(searchInp);
 
+  // Filter bar
+  const filterBar = document.createElement('div');
+  filterBar.className = 'jira-filter-bar';
+
+  function makeFilterGroup(label, values, filterKey) {
+    if (!values.length) return null;
+
+    const currentVal = activeFilters[filterKey].size ? [...activeFilters[filterKey]][0] : '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'custom-select jira-filter-csel';
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'csel-trigger csel-trigger-sm';
+    trigger.innerHTML = `<span class="csel-value">${escHtml(currentVal || label)}</span><span class="csel-chevron"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg></span>`;
+
+    const dropdown = document.createElement('ul');
+    dropdown.className = 'csel-dropdown hidden';
+
+    const allValues = ['', ...values];
+    allValues.forEach(v => {
+      const li = document.createElement('li');
+      li.className = 'csel-option' + (!v && !currentVal ? ' selected' : v === currentVal ? ' selected' : '');
+      li.innerHTML = `<span class="csel-opt-content"><span class="csel-opt-label">${escHtml(v || label)}</span></span><span class="csel-check"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg></span>`;
+      li.addEventListener('mousedown', e => {
+        e.preventDefault();
+        activeFilters[filterKey] = v ? new Set([v]) : new Set();
+        trigger.querySelector('.csel-value').textContent = v || label;
+        dropdown.querySelectorAll('.csel-option').forEach(o => o.classList.remove('selected'));
+        li.classList.add('selected');
+        dropdown.classList.add('hidden');
+        trigger.classList.remove('open');
+        refreshList();
+      });
+      dropdown.appendChild(li);
+    });
+
+    trigger.addEventListener('click', e => {
+      e.stopPropagation();
+      const isOpen = trigger.classList.contains('open');
+      // close all filter dropdowns first
+      filterBar.querySelectorAll('.csel-dropdown').forEach(d => d.classList.add('hidden'));
+      filterBar.querySelectorAll('.csel-trigger').forEach(t => t.classList.remove('open'));
+      if (!isOpen) {
+        dropdown.classList.remove('hidden');
+        trigger.classList.add('open');
+      }
+    });
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(dropdown);
+    return wrap;
+  }
+
+  [
+    makeFilterGroup('All Types',      types,      'types'),
+    makeFilterGroup('All Versions',   versions,   'versions'),
+    makeFilterGroup('All Labels',     labels,     'labels'),
+    makeFilterGroup('All Priorities', priorities, 'priorities'),
+  ].forEach(g => { if (g) filterBar.appendChild(g); });
+
+  // Hint + list
   const hint = document.createElement('p');
   hint.className = 'jira-hint';
-  hint.textContent = buildHintText(issues.length, allFetchedIssues.length);
 
   const ul = document.createElement('ul');
   ul.className = 'jira-issue-list';
-  renderIssueList(ul, issues);
 
-  jiraResults.appendChild(searchWrap);
-  jiraResults.appendChild(hint);
-  jiraResults.appendChild(ul);
+  // Scrollable list container (separate from controls so overflow doesn't clip dropdowns)
+  const listWrap = document.createElement('div');
+  listWrap.className = 'jira-list-wrap';
+  listWrap.appendChild(hint);
+  listWrap.appendChild(ul);
+
+  function refreshList() {
+    const visible = applyFilters();
+    renderIssueList(ul, visible);
+    hint.textContent = buildHintText(visible.length, allFetchedIssues.length);
+  }
+
+  jiraResults.appendChild(searchInp);
+  if (filterBar.children.length) jiraResults.appendChild(filterBar);
+  jiraResults.appendChild(listWrap);
   jiraResults.classList.remove('hidden');
 
+  refreshList();
   searchInp.focus();
 }
 
 function buildHintText(shown, total) {
   if (shown === total) return `${total} issue${total !== 1 ? 's' : ''} — click to add`;
-  return `${shown} of ${total} issues — click to add`;
+  return `${shown} of ${total} — click to add`;
 }
 
 function renderIssueList(ul, issues) {
@@ -1273,12 +1388,14 @@ function renderIssueList(ul, issues) {
   issues.forEach(issue => {
     const li = document.createElement('li');
     li.className = 'jira-issue-item';
+    const typeBadge = issue.type ? `<span class="jira-type-badge">${escHtml(issue.type)}</span>` : '';
     li.innerHTML = `
       <span class="jira-key">${escHtml(issue.key)}</span>
       <span class="jira-summary">${escHtml(issue.title.replace(issue.key + ': ', ''))}</span>
+      ${typeBadge}
       <span class="jira-status">${escHtml(issue.status)}</span>`;
     li.addEventListener('click', () => {
-      socket.emit('add-issue', { title: issue.title, jiraKey: issue.key });
+      socket.emit('add-issue', { title: issue.title, jiraKey: issue.key, devEstimate: issue.devEstimate, qaEstimate: issue.qaEstimate, originalEstimate: issue.originalEstimate });
       li.classList.add('jira-imported');
       li.style.opacity = '0.45';
       li.style.pointerEvents = 'none';

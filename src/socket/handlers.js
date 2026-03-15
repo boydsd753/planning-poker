@@ -131,12 +131,12 @@ module.exports = function registerHandlers(io) {
     });
 
     // ── Issues ─────────────────────────────────────────────────────────────────
-    socket.on('add-issue', ({ title, jiraKey }) => {
+    socket.on('add-issue', ({ title, jiraKey, devEstimate, qaEstimate, originalEstimate }) => {
       const room = rooms[socket.roomCode];
       if (!room) return;
       const t = String(title).trim().slice(0, 200);
       if (!t) return;
-      const issue = { id: generateId(), title: t, jiraKey: jiraKey || null, devEstimate: null, qaEstimate: null };
+      const issue = { id: generateId(), title: t, jiraKey: jiraKey || null, devEstimate: devEstimate || null, qaEstimate: qaEstimate || null, originalEstimate: originalEstimate || null };
       room.issues.push(issue);
       if (!room.activeIssueId) room.activeIssueId = issue.id;
       io.to(socket.roomCode).emit('room-update', room);
@@ -170,7 +170,18 @@ module.exports = function registerHandlers(io) {
       if (!room) return;
       const issue = room.issues.find(i => i.id === id);
       if (issue && ['dev','qa'].includes(team)) {
-        issue[team === 'dev' ? 'devEstimate' : 'qaEstimate'] = String(estimate).slice(0, 20);
+        const val = estimate === '' || estimate === null || estimate === undefined ? null : String(estimate).slice(0, 20);
+        issue[team === 'dev' ? 'devEstimate' : 'qaEstimate'] = val;
+        io.to(socket.roomCode).emit('room-update', room);
+      }
+    });
+
+    socket.on('mark-issue-estimated', ({ id }) => {
+      const room = rooms[socket.roomCode];
+      if (!room) return;
+      const issue = room.issues.find(i => i.id === id);
+      if (issue) {
+        issue.savedToJira = true;
         io.to(socket.roomCode).emit('room-update', room);
       }
     });

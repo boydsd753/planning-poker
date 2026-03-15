@@ -341,13 +341,11 @@
       </div>
 
       <div class="jira-step hidden" id="jira-step-filter">
-        <label class="jira-label">Issues</label>
-        <div class="custom-select" data-for="sel-jira-filter">
-          <button type="button" class="csel-trigger">
-            <span class="csel-value">Backlog</span>
-            <span class="csel-chevron"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg></span>
-          </button>
-          <ul class="csel-dropdown hidden"></ul>
+        <label class="jira-label">Scope</label>
+        <div class="jira-scope-tabs">
+          <button class="jira-scope-btn active" data-scope="backlog">Backlog</button>
+          <button class="jira-scope-btn" data-scope="activeSprint">Active Sprint</button>
+          <button class="jira-scope-btn" data-scope="all">All Open</button>
         </div>
         <select id="sel-jira-filter" class="hidden">
           <option value="all">All open issues</option>
@@ -356,7 +354,7 @@
         </select>
       </div>
 
-      <button id="btn-jira-fetch" class="btn-primary" disabled style="margin-top:4px">Fetch Issues</button>
+      <button id="btn-jira-fetch" class="btn-primary hidden" disabled>Fetch Issues</button>
       <div id="jira-results" class="jira-results hidden"></div>
     </div>
   </div>

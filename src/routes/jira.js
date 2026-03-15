@@ -82,17 +82,26 @@ jiraRoute('get', '/api/jira/issues', async (req, res, session) => {
   const allIssues = [];
 
   do {
-    const searchBody = { jql, fields: ['summary', 'status', 'issuetype'], maxResults: PAGE };
+    const searchBody = { jql, fields: ['summary', 'status', 'issuetype', 'labels', 'fixVersions', 'priority', 'parent', 'customfield_15945', 'customfield_15944', 'timetracking'], maxResults: PAGE };
     if (nextPageToken) searchBody.nextPageToken = nextPageToken;
     console.log(`[jira issues] fetching page token=${nextPageToken || 'first'}`);
     const { status, body } = await jiraPost(session, '/rest/api/3/search/jql', searchBody);
     if (status !== 200) { console.log('[jira issues] body=', body); return res.status(status).json({ error: `Jira returned ${status}`, detail: body }); }
     const parsed = JSON.parse(body);
     (parsed.issues || []).forEach(i => allIssues.push({
-      key:    i.key,
-      title:  `${i.key}: ${i.fields.summary}`,
-      status: i.fields.status?.name || '',
-      type:   i.fields.issuetype?.name || '',
+      key:             i.key,
+      title:           `${i.key}: ${i.fields.summary}`,
+      status:          i.fields.status?.name || '',
+      type:            i.fields.issuetype?.name || '',
+      labels:          i.fields.labels || [],
+      fixVersions:     (i.fields.fixVersions || []).map(v => v.name),
+      priority:        i.fields.priority?.name || '',
+      epic:            i.fields.parent?.fields?.issuetype?.name === 'Epic' ? i.fields.parent?.key : '',
+      devEstimate:     i.fields['customfield_15945'] != null ? String(i.fields['customfield_15945']) : '',
+      qaEstimate:      i.fields['customfield_15944'] != null ? String(i.fields['customfield_15944']) : '',
+      originalEstimate: i.fields.timetracking?.originalEstimateSeconds != null
+        ? String(i.fields.timetracking.originalEstimateSeconds / 3600)
+        : '',
     }));
     nextPageToken = parsed.nextPageToken;
   } while (nextPageToken);

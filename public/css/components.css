@@ -180,6 +180,14 @@
   background: rgba(52,72,255,0.08);
   border-left-color: var(--primary);
 }
+.issue-item.estimated {
+  border-left-color: var(--success);
+}
+.issue-item.estimated .issue-title { color: var(--muted); }
+.issue-saved-badge {
+  color: var(--success); flex-shrink: 0;
+  display: flex; align-items: center; margin-top: 2px;
+}
 
 .issue-title {
   flex: 1; font-size: 13px; color: var(--text);
@@ -623,13 +631,30 @@
 
 /* ── Jira Import ─────────────────────────────────────────────────────────── */
 .jira-modal-box {
-  max-width: 460px; width: 100%;
+  max-width: 640px; width: 100%;
   display: flex; flex-direction: column; gap: 14px;
 }
-.jira-step { display: flex; flex-direction: column; gap: 5px; }
+.jira-step { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .jira-step.hidden { display: none; }
 .jira-label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .jira-select { font-size: 13px; }
+
+/* Scope tab buttons */
+.jira-scope-tabs { display: flex; gap: 6px; width: 100%; }
+.jira-scope-btn {
+  flex: 1; padding: 7px 10px;
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(8,17,46,0.12);
+  background: rgba(255,255,255,0.6);
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.jira-scope-btn.active {
+  background: var(--primary); color: white;
+  border-color: var(--primary);
+}
+.jira-scope-btn:not(.active):hover { background: rgba(52,72,255,0.08); color: var(--primary); }
 
 /* Searchable project dropdown */
 .search-select-wrap { position: relative; }
@@ -648,8 +673,17 @@
 .proj-dd-item:hover { background: var(--primary); color: white; }
 .proj-dd-empty { padding: 8px 10px; font-size: 13px; color: var(--muted); }
 
+/* Filter bar (type, version, label, priority dropdowns) */
+.jira-filter-bar {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.jira-filter-csel { min-width: 0; flex: 1; }
+.csel-trigger-sm {
+  width: 100%; padding: 6px 10px;
+  font-size: 12px; border-radius: 8px;
+}
+
 /* Issue search inside results */
-.jira-issue-search-wrap { margin-bottom: 6px; }
 .jira-issue-search {
   width: 100%; box-sizing: border-box;
   padding: 7px 10px; border-radius: 8px;
@@ -663,6 +697,16 @@
   border-color: rgba(52,72,255,0.5);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 3px rgba(52,72,255,0.15);
 }
+
+/* Type badge on issue rows */
+.jira-type-badge {
+  font-size: 10px; color: var(--muted);
+  background: rgba(8,17,46,0.06); border-radius: 4px;
+  padding: 1px 5px; flex-shrink: 0; white-space: nowrap;
+}
+
+/* Fetching state */
+.jira-fetching { font-size: 13px; color: var(--muted); margin: 0; }
 
 /* ── Jira Estimate Panel ─────────────────────────────────────────────────── */
 .jira-estimate-panel {
@@ -753,13 +797,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 320px;
-  overflow-y: auto;
   margin-top: 4px;
 }
 .jira-results.hidden { display: none; }
-.jira-results::-webkit-scrollbar { width: 4px; }
-.jira-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.jira-list-wrap {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 340px; overflow-y: auto;
+}
+.jira-list-wrap::-webkit-scrollbar { width: 4px; }
+.jira-list-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .jira-hint {
   font-size: 12px;

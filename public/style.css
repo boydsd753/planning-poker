@@ -465,6 +465,29 @@ input[type=text]:focus, .select-input:focus {
   position: absolute; inset: 0; pointer-events: none;
 }
 
+/* ── Dealer toggle ───────────────────────────────────────────────────────── */
+.dealer-toggle {
+  position: absolute; bottom: 12px; right: 12px;
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none; z-index: 5;
+}
+.dealer-toggle input { display: none; }
+.dealer-toggle-track {
+  width: 34px; height: 20px; border-radius: 10px;
+  background: rgba(8,17,46,0.15); border: 1px solid rgba(8,17,46,0.12);
+  position: relative; transition: background 0.2s;
+  flex-shrink: 0;
+}
+.dealer-toggle input:checked ~ .dealer-toggle-track { background: var(--primary); }
+.dealer-toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s;
+}
+.dealer-toggle input:checked ~ .dealer-toggle-track .dealer-toggle-thumb { transform: translateX(14px); }
+.dealer-toggle-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+
 /* ── Countdown ───────────────────────────────────────────────────────────── */
 .countdown-overlay {
   position: absolute; inset: 0;

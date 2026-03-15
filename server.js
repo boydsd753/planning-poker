@@ -272,6 +272,7 @@ io.on('connection', (socket) => {
       timer: { running: false, startedAt: null, elapsed: 0 },
       issues: [],
       activeIssueId: null,
+      dealersHidden: true,
     };
 
     rooms[roomCode].players[socket.id] = {
@@ -434,6 +435,16 @@ io.on('connection', (socket) => {
     if (!to) return;
     from.isAdmin = false;
     to.isAdmin = true;
+    io.to(socket.roomCode).emit('room-update', room);
+  });
+
+  // ── Toggle dealers (host = all, player = local only via client) ────────────
+  socket.on('toggle-dealers', () => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+    const player = room.players[socket.id];
+    if (!player?.isAdmin) return;
+    room.dealersHidden = !room.dealersHidden;
     io.to(socket.roomCode).emit('room-update', room);
   });
 

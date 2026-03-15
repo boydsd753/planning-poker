@@ -112,6 +112,7 @@ const transferList     = $('transfer-player-list');
 const btnTransferCancel = $('btn-transfer-cancel');
 const btnReveal        = $('btn-reveal');
 const btnNewRound      = $('btn-new-round');
+const chkToggleDealers = $('chk-toggle-dealers');
 const btnIssuesToggle  = $('btn-issues-toggle');
 const btnSidebarClose  = $('btn-sidebar-close');
 const btnTimerStart    = $('btn-timer-start');
@@ -397,9 +398,32 @@ transferModal.addEventListener('click', e => { if (e.target === transferModal) t
 btnReveal.addEventListener('click', () => socket.emit('reveal-cards'));
 btnNewRound.addEventListener('click', () => { wasRevealed = false; socket.emit('new-round'); });
 
+// Dealer visibility
+let localDealersHidden = false; // player-local override
+function applyDealerVisibility(hiddenForAll) {
+  const hide = hiddenForAll || localDealersHidden;
+  document.querySelectorAll('.dealer, .dealer-hands, .dlr-label').forEach(el => {
+    el.style.visibility = hide ? 'hidden' : '';
+  });
+  chkToggleDealers.checked = !hide; // checked = dealers visible
+}
+
+chkToggleDealers.addEventListener('change', () => {
+  if (wasAdmin) {
+    socket.emit('toggle-dealers');
+  } else {
+    localDealersHidden = !chkToggleDealers.checked;
+    applyDealerVisibility(currentRoom?.dealersHidden || false);
+  }
+});
+
 // Issues sidebar
-btnIssuesToggle.addEventListener('click', () => issuesSidebar.classList.toggle('open'));
-btnSidebarClose.addEventListener('click', () => issuesSidebar.classList.remove('open'));
+function toggleSidebar(open) {
+  issuesSidebar.classList.toggle('open', open);
+  setTimeout(() => onResize(), 420); // wait for 0.4s CSS transition to finish
+}
+btnIssuesToggle.addEventListener('click', () => toggleSidebar(!issuesSidebar.classList.contains('open')));
+btnSidebarClose.addEventListener('click', () => toggleSidebar(false));
 
 btnAddIssue.addEventListener('click', addIssue);
 inpIssue.addEventListener('keydown', e => { if (e.key === 'Enter') addIssue(); });
@@ -501,6 +525,7 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
 
   btnTransferHost.classList.toggle('hidden', !isAdmin);
   updateJiraButton(isAdmin);
+  applyDealerVisibility(room.dealersHidden || false);
 
   if (canAct) {
     btnReveal.classList.toggle('hidden', room.revealed);

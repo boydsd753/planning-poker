@@ -106,6 +106,7 @@ const btnJoin          = $('btn-join');
 const btnCopyLink      = $('btn-copy-link');
 const btnTransferHost  = $('btn-transfer-host');
 const btnLinkJira      = $('btn-link-jira');
+const btnLinkJiraMobile = $('btn-link-jira-mobile');
 const transferModal    = $('transfer-modal');
 const transferList     = $('transfer-player-list');
 const btnTransferCancel = $('btn-transfer-cancel');
@@ -878,10 +879,18 @@ function jiraHeaders() {
 }
 
 function updateJiraButton(isAdmin) {
-  if (!isAdmin) { btnLinkJira.classList.add('hidden'); return; }
+  const label = jiraSession ? `Jira: ${jiraDomain}` : 'Link Jira';
+  if (!isAdmin) {
+    btnLinkJira.classList.add('hidden');
+    btnLinkJiraMobile.classList.add('hidden');
+    return;
+  }
   btnLinkJira.classList.remove('hidden');
-  btnLinkJira.textContent = jiraSession ? `Jira: ${jiraDomain}` : 'Link Jira';
+  btnLinkJira.textContent = label;
   btnLinkJira.classList.toggle('jira-linked', !!jiraSession);
+  btnLinkJiraMobile.classList.remove('hidden');
+  btnLinkJiraMobile.textContent = label;
+  btnLinkJiraMobile.classList.toggle('jira-linked', !!jiraSession);
 }
 
 btnLinkJira.addEventListener('click', () => {
@@ -912,6 +921,8 @@ btnLinkJira.addEventListener('click', () => {
   };
   window.addEventListener('message', onMsg);
 });
+
+btnLinkJiraMobile.addEventListener('click', () => btnLinkJira.click());
 
 // ── Jira Import ────────────────────────────────────────────────────────────
 const jiraModal        = $('jira-modal');

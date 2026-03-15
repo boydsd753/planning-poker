@@ -494,6 +494,7 @@ input[type=text]:focus, .select-input:focus {
   flex-shrink: 0;
 }
 .sidebar-title { font-size: 14px; font-weight: 600; color: var(--primary); }
+.sidebar-jira-btn { display: none; } /* shown only on mobile via media query */
 
 .btn-icon {
   background: transparent; border: none; color: var(--muted);
@@ -1214,6 +1215,7 @@ input[type=text]:focus, .select-input:focus {
   .table-lonely-hint { font-size: 9px; }
 
   /* ── Sidebar: full-screen overlay on mobile ── */
+  .sidebar-jira-btn { display: block; }
   .issues-sidebar.open {
     position: fixed;
     inset: 0;
@@ -1241,6 +1243,8 @@ input[type=text]:focus, .select-input:focus {
   .card-front .cv-center { font-size: 9px; }
   .card-empty { font-size: 10px; }
   .card-back::after { width: 7px; height: 7px; }
+  .dealer { display: none; }
+  .dealer-hands { display: none; }
   .dlr-label { display: none; }
 
   /* ── Results panel ── */

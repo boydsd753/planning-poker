@@ -218,6 +218,14 @@ module.exports = function registerHandlers(io) {
       io.to(socket.roomCode).emit('room-update', room);
     });
 
+    // ── Reactions ──────────────────────────────────────────────────────────────
+    const ALLOWED_REACTIONS = new Set(['👍','👎','❤️','😂','😮','🤔','☕','🎉','sergio','danan']);
+    socket.on('react', ({ emoji }) => {
+      if (!ALLOWED_REACTIONS.has(emoji)) return;
+      if (!socket.roomCode) return;
+      io.to(socket.roomCode).emit('reaction', { playerId: socket.id, emoji });
+    });
+
     // ── Disconnect ─────────────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       const { roomCode } = socket;

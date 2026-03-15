@@ -296,6 +296,18 @@ input[type=text]:focus, .select-input:focus {
 }
 .btn-reveal:hover { background: rgba(52,72,255,0.14); }
 
+.btn-leave {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 11px;
+  background: transparent;
+  border: 1px solid rgba(220,38,38,0.25);
+  border-radius: 10px; cursor: pointer;
+  font-size: 12px; font-weight: 500; color: rgba(220,38,38,0.7);
+  font-family: inherit; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-leave:hover { background: rgba(220,38,38,0.08); border-color: rgba(220,38,38,0.5); color: rgb(220,38,38); }
+
 .btn-new-round {
   padding: 8px 20px;
   background: #3448ff;

@@ -152,6 +152,7 @@ const togSpectator     = $('tog-spectator');
 const btnCreate        = $('btn-create');
 const btnJoin          = $('btn-join');
 const btnCopyLink      = $('btn-copy-link');
+const btnLeave         = $('btn-leave');
 const btnTransferHost  = $('btn-transfer-host');
 const btnLinkJira      = $('btn-link-jira');
 const btnLinkJiraMobile = $('btn-link-jira-mobile');
@@ -430,6 +431,16 @@ btnCopyLink.addEventListener('click', () => {
   });
 });
 
+btnLeave.addEventListener('click', () => {
+  socket.disconnect();
+  currentRoom = null;
+  wasRevealed = false;
+  wasAdmin    = false;
+  myRoom      = null;
+  screenGame.classList.remove('active');
+  screenLanding.classList.add('active');
+});
+
 btnTransferHost.addEventListener('click', () => {
   if (!currentRoom) return;
   const players = Object.values(currentRoom.players).filter(p => p.id !== myId);
@@ -492,6 +503,53 @@ function addIssue() {
 btnTimerStart.addEventListener('click', () => socket.emit('timer-start'));
 btnTimerPause.addEventListener('click', () => socket.emit('timer-pause'));
 btnTimerReset.addEventListener('click', () => socket.emit('timer-reset'));
+
+// ── Reactions ─────────────────────────────────────────────────────────────────
+(function initReactions() {
+  const trigger  = $('react-trigger');
+  const popover  = $('react-popover');
+  if (!trigger || !popover) return;
+
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = popover.classList.toggle('hidden');
+    trigger.classList.toggle('active', !open);
+  });
+
+  document.addEventListener('click', () => {
+    popover.classList.add('hidden');
+    trigger.classList.remove('active');
+  });
+
+  popover.querySelectorAll('.react-emoji-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      socket.emit('react', { emoji: btn.dataset.emoji });
+    });
+  });
+})();
+
+socket.on('reaction', ({ playerId, emoji }) => {
+  // Find the seat element for this player (in either team area)
+  const seat = document.querySelector(`.player-seat[data-player-id="${playerId}"]`);
+  if (!seat) return;
+  const el = document.createElement('div');
+  el.className = 'floating-reaction';
+  if (emoji === 'sergio' || emoji === 'danan') {
+    const img = document.createElement('img');
+    img.src = emoji === 'sergio' ? 'images/SergioHead.png' : 'images/DananHead.png';
+    img.style.cssText = 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
+    el.appendChild(img);
+  } else {
+    el.textContent = emoji;
+  }
+  // Position at top-center of the seat
+  el.style.left = '50%';
+  el.style.top  = '0';
+  el.style.transform = 'translateX(-50%)';
+  seat.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+});
 
 function syncTimer(timer) {
   if (!timer) return;
@@ -751,6 +809,7 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
 
     const seat = document.createElement('div');
     seat.className  = 'player-seat';
+    seat.dataset.playerId = player.id;
     seat.style.left = `${x}px`;
     seat.style.top  = `${y}px`;
     seat.style.transform = `translate(-50%, -50%) scale(${scale})`;

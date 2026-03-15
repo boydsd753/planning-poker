@@ -152,6 +152,97 @@ let prevPlayerIds = [];
 let timerInterval = null;
 
 // Toggle helper
+// ── Bouncing card physics engine ───────────────────────────────────────────
+function createBouncingCards(container, count, getW, getH) {
+  const suits = ['♠', '♥', '♦', '♣'];
+  const CW = 44, CH = 62;
+
+  function jitteredGrid(W, H, cardObjs) {
+    const cols = Math.ceil(Math.sqrt(count * (W / Math.max(1, H))));
+    const cellW = W / cols;
+    const cellH = H / Math.ceil(count / cols);
+    cardObjs.forEach((c, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      c.x = Math.min(col * cellW + Math.random() * Math.max(0, cellW - CW), W - CW);
+      c.y = Math.min(row * cellH + Math.random() * Math.max(0, cellH - CH), H - CH);
+    });
+  }
+
+  const cards = Array.from({ length: count }, (_, i) => {
+    const el = document.createElement('div');
+    el.className = 'ambient-card';
+    el.textContent = suits[i % suits.length];
+    el.style.opacity = (0.3 + Math.random() * 0.4).toFixed(2);
+    container.appendChild(el);
+    const speed = 0.12 + Math.random() * 0.18;
+    const angle = Math.random() * Math.PI * 2;
+    return {
+      el,
+      x: 0, y: 0,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      rot: (Math.random() - 0.5) * 40,
+      rotV: (Math.random() - 0.5) * 0.25,
+    };
+  });
+
+  // Initial placement
+  jitteredGrid(getW(), getH(), cards);
+
+  function nudgeRot(c) {
+    c.rotV = -c.rotV + (Math.random() - 0.5) * 0.15;
+    c.rotV = Math.max(-0.55, Math.min(0.55, c.rotV));
+  }
+
+  // Redistribute cards when container size changes significantly
+  let lastW = getW(), lastH = getH();
+  const ro = new ResizeObserver(() => {
+    const W = getW(), H = getH();
+    if (Math.abs(W - lastW) / Math.max(1, lastW) > 0.15 ||
+        Math.abs(H - lastH) / Math.max(1, lastH) > 0.15) {
+      lastW = W; lastH = H;
+      jitteredGrid(W, H, cards);
+    }
+  });
+  ro.observe(container === screenLanding ? document.body : container);
+
+  let rafId;
+  function tick() {
+    const W = getW(), H = getH();
+    cards.forEach(c => {
+      c.x += c.vx;
+      c.y += c.vy;
+      c.rot += c.rotV;
+      if (c.x <= 0)      { c.x = 0;      c.vx =  Math.abs(c.vx); nudgeRot(c); }
+      if (c.x >= W - CW) { c.x = W - CW; c.vx = -Math.abs(c.vx); nudgeRot(c); }
+      if (c.y <= 0)      { c.y = 0;      c.vy =  Math.abs(c.vy); nudgeRot(c); }
+      if (c.y >= H - CH) { c.y = H - CH; c.vy = -Math.abs(c.vy); nudgeRot(c); }
+      c.el.style.transform = `translate(${c.x}px, ${c.y}px) rotate(${c.rot}deg)`;
+    });
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+// Landing screen — 15 cards
+createBouncingCards(screenLanding, 15,
+  () => window.innerWidth,
+  () => window.innerHeight
+);
+
+// Game screen — 10 cards in dedicated ambient layer
+const gameAmbientLayer = document.createElement('div');
+gameAmbientLayer.className = 'game-ambient';
+screenGame.appendChild(gameAmbientLayer);
+createBouncingCards(gameAmbientLayer, 20,
+  () => gameAmbientLayer.offsetWidth  || window.innerWidth,
+  () => gameAmbientLayer.offsetHeight || window.innerHeight
+);
+
+// Track voted player IDs to detect new votes for ring animation
+let prevVotedIds = new Set();
+
 function toggleValue(btn) {
   const on = btn.classList.toggle('active');
   btn.setAttribute('aria-pressed', String(on));
@@ -205,15 +296,16 @@ socket.on('room-update', (room) => {
       showToast(`${escHtml(name)} left`, 'leave');
     });
   }
+  const prevPlayerIdsSnap = [...prevPlayerIds]; // snapshot before update for pop-in anim
   prevPlayerIds = newIds;
   currentRoom = room;
 
   syncTimer(room.timer);
 
   if (justRevealed && room.settings?.countdown) {
-    doCountdown(() => render(room, true));
+    doCountdown(() => render(room, true, prevPlayerIdsSnap));
   } else {
-    render(room, justRevealed);
+    render(room, justRevealed, prevPlayerIdsSnap);
   }
 });
 
@@ -398,7 +490,7 @@ function showToast(msg, type = 'info') {
 }
 
 // ── Main render ───────────────────────────────────────────────────────────
-function render(room, animateFlip = false) {
+function render(room, animateFlip = false, oldPlayerIds = []) {
   const s       = room.settings || {};
   const players = Object.values(room.players);
   const me      = players.find(p => p.id === myId);
@@ -438,12 +530,31 @@ function render(room, animateFlip = false) {
   const devPlayers = players.filter(p => p.role === 'dev');
   const qaPlayers  = players.filter(p => p.role === 'qa');
 
+  // prevVotedIds already holds the previous round's voted set — renderTeamPlayers
+  // compares incoming players against it to detect new votes, then we update it.
+  const incomingVotedIds = new Set(players.filter(p => p.card !== null).map(p => p.id));
+
   renderTableCenter(devPlayers, room.revealed, s, room, 'dev');
   renderTableCenter(qaPlayers,  room.revealed, s, room, 'qa');
-  renderTeamPlayers(devPlayers, room.revealed, animateFlip, 'dev');
-  renderTeamPlayers(qaPlayers,  room.revealed, animateFlip, 'qa');
+  renderTeamPlayers(devPlayers, room.revealed, animateFlip, 'dev', oldPlayerIds);
+  renderTeamPlayers(qaPlayers,  room.revealed, animateFlip, 'qa',  oldPlayerIds);
+  prevVotedIds = incomingVotedIds; // update after render so next call can diff
   renderIssues(room.issues || [], room.activeIssueId);
   renderEstimatePanel(room, isAdmin);
+
+  // Table ripple shockwave on reveal
+  if (animateFlip) {
+    [devPokerTable, qaPokerTable].forEach(table => {
+      ['', 'r2', 'r3'].forEach((cls, i) => {
+        setTimeout(() => {
+          const r = document.createElement('div');
+          r.className = 'table-ripple' + (cls ? ' ' + cls : '');
+          table.appendChild(r);
+          setTimeout(() => r.remove(), 1200);
+        }, i * 10);
+      });
+    });
+  }
 
   // Picker vs results
   if (room.revealed) {
@@ -498,7 +609,7 @@ function teamAngle(i, N) {
   return Math.PI / 2 - ARC / 2 + (i / (N - 1)) * ARC;
 }
 
-function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
+function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerIds = []) {
   const layer = team === 'dev' ? devPlayersLayer : qaPlayersLayer;
   const area  = team === 'dev' ? devArea : qaArea;
   layer.innerHTML = '';
@@ -583,6 +694,20 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
     seat.appendChild(avatar);
     seat.appendChild(nameEl);
     layer.appendChild(seat);
+
+    // Pop-in animation for newly joined players
+    if (oldPlayerIds.length > 0 && !oldPlayerIds.includes(player.id)) {
+      wrap.classList.add('card-wrap-in');
+    }
+
+    // Voted ring burst when a player just cast their vote
+    if (hasVoted && !prevVotedIds.has(player.id) && !revealed) {
+      wrap.style.position = 'relative';
+      const ring = document.createElement('div');
+      ring.className = 'vote-ring';
+      wrap.appendChild(ring);
+      setTimeout(() => ring.remove(), 800);
+    }
 
     if (animateFlip && revealed && hasVoted && !isSpec) {
       setTimeout(() => inner.classList.add('flipped'), i * 140);
@@ -669,6 +794,15 @@ function renderResults(players, settings, room) {
 
   resultsContent.innerHTML = `<div class="results-teams"><div class="results-team">${devHtml}</div><div class="results-team">${qaHtml}</div></div>`;
 
+  // Animate bars from 0 → final height
+  requestAnimationFrame(() => {
+    resultsContent.querySelectorAll('.vote-bar-fill').forEach((bar, i) => {
+      const target = bar.style.height;
+      bar.style.height = '0';
+      bar.style.transition = `height 0.55s cubic-bezier(0.4, 0, 0.2, 1) ${i * 60}ms`;
+      requestAnimationFrame(() => { bar.style.height = target; });
+    });
+  });
 }
 
 function buildTeamResults(teamPlayers, settings, room, team, label) {
@@ -1131,8 +1265,21 @@ function renderIssueList(ul, issues) {
 
 // Helpers
 function showScreen(name) {
-  screenLanding.classList.toggle('active', name === 'landing');
-  screenGame.classList.toggle('active',   name === 'game');
+  const overlay = document.createElement('div');
+  overlay.className = 'screen-transition';
+  document.body.appendChild(overlay);
+  // Force reflow then sweep in
+  void overlay.offsetWidth;
+  overlay.classList.add('sweep-in');
+  setTimeout(() => {
+    screenLanding.classList.toggle('active', name === 'landing');
+    screenGame.classList.toggle('active',   name === 'game');
+    overlay.classList.remove('sweep-in');
+    overlay.classList.add('sweep-out');
+    // Recalculate table sizes now that the game screen is visible
+    if (name === 'game') requestAnimationFrame(() => onResize());
+    setTimeout(() => overlay.remove(), 420);
+  }, 360);
 }
 
 function getInitials(name) {

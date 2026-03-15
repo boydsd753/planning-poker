@@ -46,6 +46,20 @@
   .avatar-preview { width: 46px; height: 46px; }
   #avatar-preview-initials { font-size: 15px; }
 
+  .react-popover {
+    position: fixed;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%);
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 280px;
+    border-radius: 20px;
+    z-index: 500;
+  }
+
   /* ── Header: ultra-compact single row ── */
   .game-header { flex-wrap: nowrap; padding: 5px 10px; gap: 4px; }
 
@@ -74,7 +88,7 @@
   .btn-new-round { padding: 5px 10px; font-size: 11px; border-radius: 9px; }
 
   /* ── Team areas: minimal height so both fit ── */
-  .team-area { min-height: 80px; }
+  .team-area { min-height: 80px; overflow: visible; }
   .team-label { font-size: 9px; padding: 2px 7px; top: 3px; letter-spacing: 0.06em; }
 
   /* ── Table surface: thin border on mobile ── */

@@ -295,6 +295,7 @@
 .player-card-inner {
   width: 100%; height: 100%; position: relative;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .player-card-inner.flipped { transform: rotateY(180deg); }
@@ -302,6 +303,7 @@
 .card-face {
   position: absolute; inset: 0; border-radius: 7px;
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 3px 10px rgba(0,0,0,0.45);
 }

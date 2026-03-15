@@ -460,8 +460,9 @@ function sizeTables() {
   [['dev', devArea, devPokerTable], ['qa', qaArea, qaPokerTable]].forEach(([team, area, table]) => {
     const aw = area.offsetWidth;
     const ah = area.offsetHeight;
-    const tw = Math.min(aw * 0.58, 380);
-    const th = Math.min(ah * 0.90, 700);
+    const mobile = aw < 500;
+    const tw = Math.min(aw * (mobile ? 0.42 : 0.58), 380);
+    const th = Math.min(ah * (mobile ? 0.62 : 0.90), 700);
     table.style.width  = `${tw}px`;
     table.style.height = `${th}px`;
 
@@ -505,9 +506,11 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team) {
   const aw = area.offsetWidth;
   const ah = area.offsetHeight;
   const cx = aw / 2;
-  const cy = ah / 2;
-  const rx = Math.min(aw * 0.36, 210);
-  const ry = Math.min(ah * 0.45, 300);
+  const isMobile = aw < 500;
+  // On mobile: tighter radii + shift center down so players don't clip at top
+  const rx = Math.min(aw * (isMobile ? 0.28 : 0.36), 210);
+  const ry = Math.min(ah * (isMobile ? 0.30 : 0.45), 300);
+  const cy = ah / 2 + (isMobile ? ah * 0.06 : 0);
 
   // Put "me" near the middle of the arc (bottom position)
   const myIdx = teamPlayers.findIndex(p => p.id === myId);

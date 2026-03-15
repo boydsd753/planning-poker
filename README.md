@@ -24,8 +24,8 @@ Free real-time planning poker for agile teams. No sign-up required.
 - **Socket.IO** — real-time WebSocket layer; all game state (players joining, votes, reveals, round resets) is communicated via events over a persistent socket connection
 
 ### Frontend
-- **Vanilla JS** — no frontend framework. A single `app.js` file handles all UI state, socket events, DOM updates, and animations
-- **Plain HTML/CSS** — `index.html` is the entire app shell; CSS variables and media queries handle theming and mobile responsiveness
+- **Vanilla JS** — no frontend framework. Client-side logic is in `public/js/app.js` and handles all UI state, socket events, DOM updates, and animations
+- **Plain HTML/CSS** — `index.html` is the entire app shell; CSS is split into focused files loaded in order
 - **Physics engine** — bouncing card background animations are driven by a custom `requestAnimationFrame` loop with wall-collision detection, not CSS animations
 
 ### Infrastructure
@@ -48,19 +48,41 @@ dotenv     ^17.3.1   Environment variable management
 
 ```
 planning-poker/
-├── server.js          # Express server, Socket.IO game logic, Jira OAuth & API proxy
-├── public/
-│   ├── index.html     # App shell — all screens (landing, game) live here
-│   ├── app.js         # All client-side logic
-│   ├── style.css      # All styles including animations and mobile responsive
-│   ├── favicon.svg    # App icon
-│   ├── og-image.png   # Open Graph image for link previews
-│   ├── manifest.json  # PWA manifest (Add to Home Screen support)
-│   ├── robots.txt     # Search engine crawl rules
-│   ├── privacy.html   # Privacy policy (served at /privacy)
-│   └── 404.html       # Custom 404 page
+├── server.js                  # Entry point stub → src/index.js
 ├── package.json
-└── .env               # Local env vars (not committed)
+├── .env                       # Local env vars (not committed)
+│
+├── src/                       # Backend source
+│   ├── index.js               # Express + Socket.IO setup, mounts all routes/handlers
+│   ├── state.js               # Shared in-memory state (rooms, jiraSessions)
+│   ├── utils.js               # Helpers: generateRoomCode, sanitizeSettings, httpRequest, etc.
+│   ├── middleware/
+│   │   └── security.js        # Security headers middleware
+│   ├── routes/
+│   │   ├── auth.js            # Atlassian OAuth routes (/auth/jira, /auth/jira/callback)
+│   │   └── jira.js            # Jira API proxy routes (/api/jira/*)
+│   └── socket/
+│       └── handlers.js        # All Socket.IO event handlers
+│
+└── public/                    # Frontend (served statically by Express)
+    ├── index.html             # App shell — all screens (landing, game) live here
+    ├── favicon.svg            # App icon
+    ├── manifest.json          # PWA manifest (Add to Home Screen support)
+    ├── robots.txt             # Search engine crawl rules
+    ├── privacy.html           # Privacy policy (served at /privacy)
+    ├── 404.html               # Custom 404 page
+    ├── css/
+    │   ├── variables.css      # CSS custom properties, reset, base styles
+    │   ├── layout.css         # Screens, landing, game layout, header, timer
+    │   ├── components.css     # Tables, sidebar, cards, results, modals, toasts
+    │   ├── animations.css     # Keyframes, transitions, ambient effects
+    │   └── responsive.css     # Media queries (1024px, 860px, 640px)
+    ├── js/
+    │   └── app.js             # All client-side logic
+    └── images/
+        ├── og-image.png       # Open Graph image for link previews
+        ├── DananHead.png      # Dev dealer avatar
+        └── SergioHead.png     # QA dealer avatar
 ```
 
 ---
@@ -89,7 +111,7 @@ Open [http://localhost:3000](http://localhost:3000)
 ## Architecture Notes
 
 ### Game State
-All room state lives in memory on the server (`rooms` object in `server.js`). There is no database. If the server restarts, all active rooms are lost. This is intentional — rooms are ephemeral by design.
+All room state lives in memory on the server (`rooms` object in `src/state.js`). There is no database. If the server restarts, all active rooms are lost. This is intentional — rooms are ephemeral by design.
 
 ### Real-time Communication
 Socket.IO handles all game events:
@@ -97,10 +119,11 @@ Socket.IO handles all game events:
 - `pick-card` — a player submits their vote
 - `reveal` — host reveals all votes
 - `new-round` — host resets for next story
-- `add-issue` / `remove-issue` / `set-active-issue` — issue management
+- `add-issue` / `delete-issue` / `set-active-issue` — issue management
+- `toggle-dealers` — host toggles dealer visibility for all players
 
 ### Jira Integration
-The server acts as a proxy between the client and the Atlassian API. OAuth tokens are stored in a `jiraSessions` object in memory and are refreshed automatically before expiry. Tokens are never written to disk.
+The server acts as a proxy between the client and the Atlassian API. OAuth tokens are stored in a `jiraSessions` object in `src/state.js` and are refreshed automatically before expiry. Tokens are never written to disk. Issue fetching uses paginated requests (100 per page) to retrieve all results regardless of project size.
 
 ---
 

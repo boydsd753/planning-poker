@@ -1,6 +1,6 @@
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
-/* Tablet / zoomed-in desktop (≤ 1024px) */
+/* Tablet / zoomed-in desktop (≤ 1024px wide) */
 @media (max-width: 1024px) {
   .game-header { padding: 8px 14px; gap: 8px; }
   .game-name-display { max-width: 140px; font-size: 13px; }
@@ -8,6 +8,32 @@
   .btn-ghost { padding: 5px 10px; font-size: 12px; }
   .timer-display { font-size: 13px; }
   .pick-card { width: 48px; height: 68px; font-size: 15px; border-radius: 10px; }
+}
+
+/* ── Laptop / short screens (≤ 820px tall) — overrides width breakpoint above ── */
+@media (max-height: 820px) {
+  /* Header tighter */
+  .game-header { padding: 5px 14px; gap: 6px; }
+
+  /* Picker area much more compact */
+  .picker-area { padding: 4px 16px 6px; }
+  #picker-panel { gap: 4px; }
+  .picker-label { font-size: 10px; }
+  .cards-row { padding-top: 10px; padding-bottom: 2px; gap: 5px; }
+
+  /* Pick cards significantly smaller */
+  .pick-card { width: 36px; height: 52px; font-size: 13px; border-radius: 9px; }
+  .pick-card:hover:not(:disabled) { transform: translateY(-8px); }
+  .pick-card.selected { transform: translateY(-9px); }
+
+  /* Player seats significantly smaller */
+  .player-seat { min-width: 48px; gap: 3px; }
+  .player-card-wrap { width: 46px; height: 66px; }
+  .player-avatar { width: 34px; height: 34px; font-size: 12px; border-width: 1px; }
+  .player-name { font-size: 10px; max-width: 70px; padding: 2px 7px; }
+  .card-back::after { width: 14px; height: 14px; }
+  .card-front .cv-center { font-size: 14px; }
+  .card-empty { font-size: 10px; }
 }
 
 /* Stack tables vertically on narrow screens (≤ 860px) */
@@ -90,6 +116,8 @@
   /* ── Team areas: minimal height so both fit ── */
   .team-area { min-height: 80px; overflow: visible; }
   .team-label { font-size: 9px; padding: 2px 7px; top: 3px; letter-spacing: 0.06em; }
+
+
 
   /* ── Table surface: thin border on mobile ── */
   .table-surface { border-width: 7px; }

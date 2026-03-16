@@ -11,7 +11,7 @@
 .team-area:last-child { border-right: none; }
 
 .team-label {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 10px; left: 10px; transform: none;
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
   padding: 4px 14px; border-radius: 20px; border: 1px solid; z-index: 5;
   white-space: nowrap; pointer-events: none;
@@ -29,8 +29,6 @@
   background: radial-gradient(ellipse at 40% 35%, #2d8a54 0%, #1e6b3e 45%, #145230 100%);
   border: 14px solid #0d3d22;
   box-shadow:
-    0 0 0 3px #2d8a5444,
-    0 0 0 6px #0d3d2266,
     0 24px 70px rgba(0,0,0,0.7),
     inset 0 2px 10px rgba(255,255,255,0.08);
   display: flex; align-items: center; justify-content: center;

@@ -738,12 +738,22 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
 }
 
 function sizeTables() {
+  const shortScreen = window.innerHeight < 820;
   [['dev', devArea, devPokerTable], ['qa', qaArea, qaPokerTable]].forEach(([team, area, table]) => {
     const aw = area.offsetWidth;
     const ah = area.offsetHeight;
     const mobile = aw < 500;
-    const tw = Math.min(aw * (mobile ? 0.42 : 0.58), 380);
-    const th = Math.min(ah * (mobile ? 0.62 : 0.90), 700);
+    let tw, th;
+    if (mobile) {
+      tw = Math.min(aw * 0.42, 220);
+      th = Math.min(ah * 0.62, 320);
+    } else if (shortScreen) {
+      tw = Math.min(aw * 0.38, 210);
+      th = Math.min(ah * 0.60, 320);
+    } else {
+      tw = Math.min(aw * 0.58, 380);
+      th = Math.min(ah * 0.90, 700);
+    }
     table.style.width  = `${tw}px`;
     table.style.height = `${th}px`;
 
@@ -751,7 +761,11 @@ function sizeTables() {
     const ds = Math.max(0.3, tw / 380);
     const dealer      = $(`${team}-dealer`);
     const dealerHands = $(`${team}-dealer-hands`);
-    const dt = `translate(-50%, -68%) scale(${ds})`;
+    // Keep dealer proportionally anchored at all scales.
+    // Original -68% = -108.8px at ds=1 looked correct; scale that offset with ds
+    // so the same fraction of the dealer body sits at the table edge at any size.
+    const yT = (-108.8 * ds).toFixed(1);
+    const dt = `translate(-50%, ${yT}px) scale(${ds})`;
     if (dealer)      dealer.style.transform      = dt;
     if (dealerHands) dealerHands.style.transform = dt;
   });
@@ -790,9 +804,15 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
   const ah = area.offsetHeight;
   const cx = aw / 2;
   const isMobile = aw < 500;
-  // On mobile: tighter radii + shift center down so players don't clip at top
-  const rx = Math.min(aw * (isMobile ? 0.28 : 0.36), 210);
-  const ry = Math.min(ah * (isMobile ? 0.30 : 0.45), 300);
+  const isShort  = window.innerHeight < 820;
+
+  // Scale factor — matches dealer formula so orbits stay tight around the table
+  const twForScale = isMobile ? Math.min(aw * 0.42, 220) : isShort ? Math.min(aw * 0.38, 210) : Math.min(aw * 0.58, 380);
+  const sizeScale = Math.max(0.3, twForScale / 380);
+
+  // Orbit radii scaled so players hug the table at all screen sizes
+  const rx = Math.min(aw * (isMobile ? 0.28 : 0.36), 210) * sizeScale;
+  const ry = Math.min(ah * (isMobile ? 0.30 : 0.45), 300) * sizeScale;
   const cy = ah / 2 + (isMobile ? ah * 0.06 : 0);
 
   // Put "me" near the middle of the arc (bottom position)
@@ -805,9 +825,6 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
   }
 
   const N = ordered.length;
-  // Scale seats proportional to table width (same formula as dealer)
-  const tw = Math.min(aw * 0.58, 380);
-  const sizeScale = Math.max(0.3, tw / 380);
   const crowdScale = N <= 9 ? 1.0 : Math.max(0.55, 1.0 - (N - 9) * 0.05);
   const scale = sizeScale * crowdScale;
 

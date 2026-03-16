@@ -175,6 +175,7 @@ const devCenterEl      = $('dev-center-content');
 const qaCenterEl       = $('qa-center-content');
 const devPlayersLayer  = $('dev-players-layer');
 const qaPlayersLayer   = $('qa-players-layer');
+const spectatorsLayer  = $('spectators-layer');
 const devArea          = $('dev-area');
 const qaArea           = $('qa-area');
 const devPokerTable    = $('dev-poker-table');
@@ -298,7 +299,7 @@ function toggleValue(btn) {
   btn.setAttribute('aria-pressed', String(on));
   return on;
 }
-[togAutoReveal, togShowAvg, togCountdown, togSpectator, $('tog-timer-auto-reveal')].filter(Boolean).forEach(btn => {
+[togAutoReveal, togShowAvg, togCountdown, $('tog-timer-auto-reveal')].filter(Boolean).forEach(btn => {
   btn.addEventListener('click', () => toggleValue(btn));
 });
 
@@ -391,18 +392,20 @@ btnCreate.addEventListener('click', () => {
   if (!name) { landingError.textContent = 'Please enter your name.'; return; }
   landingError.textContent = '';
   if (!socket.connected) socket.connect();
-  socket.emit('create-room', { name, settings: getSettings(), role: selRole.value, avatar: myAvatar });
+  const createRole = selRole.value;
+  socket.emit('create-room', { name, settings: getSettings(), role: createRole, isSpectator: createRole === 'spectator', avatar: myAvatar });
 });
 
 btnJoin.addEventListener('click', () => {
   const name = inpName.value.trim();
   const code = inpRoomCode.value.trim().toUpperCase();
-  const isSpectator = togSpectator.classList.contains('active');
+  const joinRole = selRole.value;
+  const isSpectator = joinRole === 'spectator';
   if (!name) { landingError.textContent = 'Please enter your name.'; return; }
   if (!code) { landingError.textContent = 'Please enter a room code.'; return; }
   landingError.textContent = '';
   if (!socket.connected) socket.connect();
-  socket.emit('join-room', { name, roomCode: code, isSpectator, role: selRole.value, avatar: myAvatar });
+  socket.emit('join-room', { name, roomCode: code, isSpectator, role: joinRole, avatar: myAvatar });
 });
 
 inpName.addEventListener('keydown', e => {
@@ -618,6 +621,7 @@ function onResize() {
     sizeTables();
     renderTeamPlayers(players.filter(p => p.role === 'dev'), currentRoom.revealed, false, 'dev');
     renderTeamPlayers(players.filter(p => p.role === 'qa'),  currentRoom.revealed, false, 'qa');
+    renderSpectators(players.filter(p => p.isSpectator));
   }
 }
 window.addEventListener('resize', onResize);
@@ -707,6 +711,7 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
   renderTableCenter(qaPlayers,  room.revealed, s, room, 'qa');
   renderTeamPlayers(devPlayers, room.revealed, animateFlip, 'dev', oldPlayerIds);
   renderTeamPlayers(qaPlayers,  room.revealed, animateFlip, 'qa',  oldPlayerIds);
+  renderSpectators(players.filter(p => p.isSpectator));
   prevVotedIds = incomingVotedIds; // update after render so next call can diff
   renderIssues(room.issues || [], room.activeIssueId);
   renderEstimatePanel(room, isAdmin);
@@ -815,13 +820,17 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
   const ry = Math.min(ah * (isMobile ? 0.30 : 0.45), 300) * sizeScale;
   const cy = ah / 2 + (isMobile ? ah * 0.06 : 0);
 
+  // Separate spectators — they go in the center, not the orbit
+  const voters     = teamPlayers.filter(p => !p.isSpectator);
+  const spectators = teamPlayers.filter(p => p.isSpectator);
+
   // Put "me" near the middle of the arc (bottom position)
-  const myIdx = teamPlayers.findIndex(p => p.id === myId);
-  let ordered = [...teamPlayers];
+  const myIdx = voters.findIndex(p => p.id === myId);
+  let ordered = [...voters];
   if (myIdx >= 0) {
-    const mid = Math.floor((teamPlayers.length - 1) / 2);
+    const mid = Math.floor((voters.length - 1) / 2);
     ordered.splice(myIdx, 1);
-    ordered.splice(mid, 0, teamPlayers[myIdx]);
+    ordered.splice(mid, 0, voters[myIdx]);
   }
 
   const N = ordered.length;
@@ -834,7 +843,6 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
     const y = cy + ry * Math.sin(angle);
     const isMe    = player.id === myId;
     const hasVoted = player.card !== null;
-    const isSpec  = player.isSpectator;
 
     const seat = document.createElement('div');
     seat.className  = 'player-seat';
@@ -847,16 +855,15 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
     wrap.className = 'player-card-wrap';
     const inner = document.createElement('div');
     inner.className = 'player-card-inner';
-    if (revealed && hasVoted && !isSpec && !animateFlip) inner.classList.add('flipped');
+    if (revealed && hasVoted && !animateFlip) inner.classList.add('flipped');
 
     const back = document.createElement('div');
-    back.className = (!isSpec && hasVoted) ? 'card-face card-back' : 'card-face card-empty';
-    if (isSpec) back.innerHTML = ICON_EYE;
-    else if (!hasVoted) back.textContent = '·';
+    back.className = hasVoted ? 'card-face card-back' : 'card-face card-empty';
+    if (!hasVoted) back.textContent = '·';
 
     const front = document.createElement('div');
     front.className = 'card-face card-front';
-    if (revealed && hasVoted && !isSpec) {
+    if (revealed && hasVoted) {
       const v = player.card;
       front.innerHTML = `<span class="cv-center">${cardDisplay(v)}</span>`;
     }
@@ -866,13 +873,8 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
     wrap.appendChild(inner);
 
     const avatar = document.createElement('div');
-    avatar.className = 'player-avatar' +
-      (isMe ? ' is-me' : '') +
-      (player.isAdmin ? ' is-admin' : '') +
-      (isSpec ? ' is-spectator' : '');
-    if (isSpec) {
-      avatar.innerHTML = ICON_EYE;
-    } else if (player.avatar) {
+    avatar.className = 'player-avatar' + (isMe ? ' is-me' : '') + (player.isAdmin ? ' is-admin' : '');
+    if (player.avatar) {
       const avatarImg = document.createElement('img');
       avatarImg.src = player.avatar;
       avatarImg.alt = player.name;
@@ -883,10 +885,10 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
     avatar.title = (player.isAdmin ? '(host) ' : '') + player.name;
 
     const nameEl = document.createElement('div');
-    nameEl.className = 'player-name' + (isMe ? ' is-me' : '') + (isSpec ? ' is-spectator' : '');
+    nameEl.className = 'player-name' + (isMe ? ' is-me' : '');
     nameEl.innerHTML = isMe
       ? `${escHtml(player.name)} (You)`
-      : escHtml(player.name) + (player.isAdmin ? ` ${ICON_STAR}` : '') + (isSpec ? ` ${ICON_EYE}` : '');
+      : escHtml(player.name) + (player.isAdmin ? ` ${ICON_STAR}` : '');
 
     seat.appendChild(wrap);
     seat.appendChild(avatar);
@@ -907,9 +909,46 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
       setTimeout(() => ring.remove(), 800);
     }
 
-    if (animateFlip && revealed && hasVoted && !isSpec) {
+    if (animateFlip && revealed && hasVoted) {
       setTimeout(() => inner.classList.add('flipped'), i * 140);
     }
+  });
+
+}
+
+function renderSpectators(spectators) {
+  spectatorsLayer.innerHTML = '';
+  spectators.forEach((player, i) => {
+    const total = spectators.length;
+    const offsetY = total > 1 ? (i - (total - 1) / 2) * 60 : 0;
+    const isMe = player.id === myId;
+
+    const seat = document.createElement('div');
+    seat.className = 'spectator-seat';
+    seat.dataset.playerId = player.id;
+    seat.style.transform = `translateY(${offsetY}px)`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'player-avatar is-spectator' + (isMe ? ' is-me' : '') + (player.isAdmin ? ' is-admin' : '');
+    if (player.avatar) {
+      const img = document.createElement('img');
+      img.src = player.avatar;
+      img.alt = player.name;
+      avatar.appendChild(img);
+    } else {
+      avatar.innerHTML = ICON_EYE;
+    }
+    avatar.title = (player.isAdmin ? '(host) ' : '') + player.name;
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'player-name is-spectator' + (isMe ? ' is-me' : '');
+    nameEl.innerHTML = isMe
+      ? `${escHtml(player.name)} (You)`
+      : escHtml(player.name) + (player.isAdmin ? ` ${ICON_STAR}` : '');
+
+    seat.appendChild(avatar);
+    seat.appendChild(nameEl);
+    spectatorsLayer.appendChild(seat);
   });
 }
 

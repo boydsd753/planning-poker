@@ -16,7 +16,7 @@ module.exports = function registerHandlers(io) {
       return raw;
     }
 
-    socket.on('create-room', ({ name, settings, role, avatar }) => {
+    socket.on('create-room', ({ name, settings, role, isSpectator, avatar }) => {
       let roomCode;
       do { roomCode = generateRoomCode(); } while (rooms[roomCode]);
 
@@ -37,8 +37,8 @@ module.exports = function registerHandlers(io) {
         avatar: sanitizeAvatar(avatar),
         card: null,
         isAdmin: true,
-        isSpectator: false,
-        role: ['dev','qa'].includes(role) ? role : 'dev',
+        isSpectator: Boolean(isSpectator),
+        role: ['dev','qa','spectator'].includes(role) ? role : 'dev',
       };
 
       socket.join(roomCode);
@@ -60,7 +60,7 @@ module.exports = function registerHandlers(io) {
         card: null,
         isAdmin: false,
         isSpectator: Boolean(isSpectator),
-        role: ['dev','qa'].includes(role) ? role : 'dev',
+        role: ['dev','qa','spectator'].includes(role) ? role : 'dev',
       };
 
       socket.join(code);

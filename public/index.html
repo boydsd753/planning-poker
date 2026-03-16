@@ -61,10 +61,12 @@
         <div class="seg-control" data-for="sel-role">
           <button type="button" class="seg-btn active" data-value="dev">Dev</button>
           <button type="button" class="seg-btn" data-value="qa">QA</button>
+          <button type="button" class="seg-btn" data-value="spectator">Spectator</button>
         </div>
         <select id="sel-role" class="hidden">
           <option value="dev">Dev</option>
           <option value="qa">QA</option>
+          <option value="spectator">Spectator</option>
         </select>
       </div>
 
@@ -163,13 +165,6 @@
       <!-- JOIN -->
       <div id="tab-join" class="tab-panel">
         <input id="inp-room-code" type="text" placeholder="Room code (e.g. AB3X9Y)" maxlength="6" autocomplete="off" style="text-transform:uppercase">
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label">Join as spectator</span>
-            <span class="toggle-hint">Watch the game without voting.</span>
-          </div>
-          <button type="button" class="toggle-btn" id="tog-spectator" aria-pressed="false"></button>
-        </div>
         <button id="btn-join" class="btn-primary">Join Room</button>
       </div>
 
@@ -314,6 +309,9 @@
           </div>
           <div class="players-layer" id="qa-players-layer"></div>
         </div>
+
+        <!-- Spectators — centered between the two tables -->
+        <div id="spectators-layer" class="spectators-layer"></div>
 
         <!-- Shared countdown overlay -->
         <div id="countdown-overlay" class="countdown-overlay hidden">

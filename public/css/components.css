@@ -332,6 +332,29 @@
 }
 .card-front .cv-center { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
 
+/* Spectators layer — centered between the two tables */
+.spectators-layer {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.spectator-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.spectator-seat .player-avatar {
+  width: 44px; height: 44px; font-size: 15px;
+}
+
 .player-avatar {
   width: 38px; height: 38px; border-radius: 50%;
   background: linear-gradient(145deg, rgba(72,90,255,0.95), rgba(42,60,220,0.85));
@@ -354,9 +377,10 @@
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 0 2.5px rgba(255,255,255,0.55), 0 4px 14px rgba(0,0,0,0.35);
 }
 .player-avatar.is-spectator {
-  background: rgba(255,255,255,0.12);
-  border-color: rgba(255,255,255,0.18);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
+  background: rgba(30, 40, 80, 0.75);
+  border-color: rgba(255,255,255,0.3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 4px 14px rgba(0,0,0,0.35);
+  color: rgba(255,255,255,0.9);
 }
 .player-avatar img {
   width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;

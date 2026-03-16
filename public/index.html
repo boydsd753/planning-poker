@@ -201,8 +201,7 @@
 
       <div class="header-right">
         <button id="btn-copy-link" class="btn-ghost">Copy Link</button>
-        <button id="btn-issues-toggle" class="btn-ghost">Issues</button>
-        <button id="btn-link-jira" class="btn-ghost hidden">Link Jira</button>
+        <button id="btn-link-jira" class="btn-ghost hidden" style="display:none!important">Link Jira</button>
         <button id="btn-transfer-host" class="btn-ghost hidden">Transfer Host</button>
         <button id="btn-leave" class="btn-leave" title="Leave room">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75"/></svg>
@@ -326,11 +325,17 @@
         </label>
       </div>
 
+      <!-- Side tab to open issues panel -->
+      <button id="btn-issues-toggle" class="sidebar-tab" title="Toggle issues">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/></svg>
+        <span>Issues</span>
+      </button>
+
       <!-- Issues sidebar -->
       <aside class="issues-sidebar" id="issues-sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">Issues</span>
-          <button id="btn-link-jira-mobile" class="btn-ghost hidden sidebar-jira-btn">Link Jira</button>
+          <button id="btn-link-jira-mobile" class="btn-ghost sidebar-jira-btn">Link Jira</button>
           <button id="btn-sidebar-close" class="btn-icon" title="Close"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
         </div>
         <ul class="issue-list" id="issue-list"></ul>

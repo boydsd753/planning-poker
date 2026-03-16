@@ -488,6 +488,7 @@ chkToggleDealers.addEventListener('change', () => {
 // Issues sidebar
 function toggleSidebar(open) {
   issuesSidebar.classList.toggle('open', open);
+  btnIssuesToggle.classList.toggle('sidebar-open', open);
   setTimeout(() => onResize(), 420); // wait for 0.4s CSS transition to finish
 }
 btnIssuesToggle.addEventListener('click', () => toggleSidebar(!issuesSidebar.classList.contains('open')));
@@ -1263,17 +1264,14 @@ function jiraHeaders() {
 
 function updateJiraButton(isAdmin) {
   const label = jiraSession ? `Jira: ${jiraDomain}` : 'Link Jira';
-  if (!isAdmin) {
-    btnLinkJira.classList.add('hidden');
+  // Sidebar Jira button visible to admins only (linking requires host)
+  if (isAdmin) {
+    btnLinkJiraMobile.classList.remove('hidden');
+    btnLinkJiraMobile.textContent = label;
+    btnLinkJiraMobile.classList.toggle('jira-linked', !!jiraSession);
+  } else {
     btnLinkJiraMobile.classList.add('hidden');
-    return;
   }
-  btnLinkJira.classList.remove('hidden');
-  btnLinkJira.textContent = label;
-  btnLinkJira.classList.toggle('jira-linked', !!jiraSession);
-  btnLinkJiraMobile.classList.remove('hidden');
-  btnLinkJiraMobile.textContent = label;
-  btnLinkJiraMobile.classList.toggle('jira-linked', !!jiraSession);
 }
 
 btnLinkJira.addEventListener('click', () => {
@@ -1297,6 +1295,10 @@ btnLinkJira.addEventListener('click', () => {
       localStorage.setItem('jiraDomain',  jiraDomain);
       updateJiraButton(true);
       showToast(`Jira linked: ${escHtml(jiraDomain)}`, 'join');
+      if (btnLinkJira._openImportAfterAuth) {
+        btnLinkJira._openImportAfterAuth = false;
+        btnJiraImport.click();
+      }
     } else if (e.data.jiraError) {
       showToast(`Jira error: ${escHtml(e.data.jiraError)}`, 'leave');
     }
@@ -1393,7 +1395,7 @@ document.querySelectorAll('.jira-scope-btn').forEach(btn => {
 });
 
 btnJiraImport.addEventListener('click', async () => {
-  if (!jiraSession) { showToast('Link your Jira account first (top-right)', 'info'); return; }
+  if (!jiraSession) { btnLinkJira._openImportAfterAuth = true; btnLinkJira.click(); return; }
   jiraModal.classList.remove('hidden');
 
   // If already loaded, just reopen where we left off

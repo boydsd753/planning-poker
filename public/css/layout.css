@@ -360,5 +360,41 @@ input[type=text]:focus, .select-input:focus {
 .game-body {
   flex: 1; display: flex; overflow: hidden; position: relative; z-index: 1;
 }
+
+/* ── Sidebar tab — peeks from right edge to open the issues panel ── */
+.sidebar-tab {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 14px 8px;
+  background: var(--glass, rgba(255,255,255,0.65));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border, rgba(8,17,46,0.1));
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+  box-shadow: -2px 0 16px rgba(52,72,255,0.1), inset 1px 0 0 rgba(255,255,255,0.8);
+  cursor: pointer;
+  z-index: 5;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.15s;
+}
+.sidebar-tab:hover { background: rgba(255,255,255,0.92); }
+.sidebar-tab span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+/* Slide left when sidebar opens */
+.sidebar-tab.sidebar-open { right: 280px; }
 .game-header { position: relative; z-index: 2; }
 .picker-area  { position: relative; z-index: 1; }

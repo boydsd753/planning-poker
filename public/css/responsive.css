@@ -12,6 +12,21 @@
 
 /* ── Laptop / short screens (≤ 820px tall) — overrides width breakpoint above ── */
 @media (max-height: 820px) {
+  /* Landing page tighter so it fits without scrolling */
+  .landing-box { padding: 20px 24px; gap: 10px; }
+  .logo h1 { font-size: 22px; margin-top: 4px; }
+  .logo p  { font-size: 12px; margin-top: 2px; }
+  .toggle-label { font-size: 13px; }
+  .toggle-hint  { font-size: 11px; }
+  .toggle-row { gap: 8px; }
+  .tab-panel { gap: 10px; }
+  .divider { margin: 0; }
+  .btn-primary { padding: 10px; font-size: 14px; margin-top: 0; }
+  input[type=text] { padding: 8px 12px; font-size: 13px; }
+  .seg-btn { padding: 6px 10px; font-size: 13px; }
+  .tab-btn { padding: 6px; font-size: 13px; }
+  .csel-trigger { padding: 8px 12px; font-size: 13px; }
+
   /* Header tighter */
   .game-header { padding: 5px 14px; gap: 6px; }
 

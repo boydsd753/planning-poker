@@ -43,12 +43,12 @@
 
   /* Player seats significantly smaller */
   .player-seat { min-width: 48px; gap: 3px; }
-  .player-card-wrap { width: 46px; height: 66px; }
-  .player-avatar { width: 34px; height: 34px; font-size: 12px; border-width: 1px; }
-  .player-name { font-size: 10px; max-width: 70px; padding: 2px 7px; }
-  .card-back::after { width: 14px; height: 14px; }
-  .card-front .cv-center { font-size: 14px; }
-  .card-empty { font-size: 10px; }
+  .player-card-wrap { width: 42px; height: 60px; }
+  .player-avatar { width: 30px; height: 30px; font-size: 11px; border-width: 1px; }
+  .player-name { font-size: 13px; padding: 2px 7px; }
+  .card-back::after { width: 16px; height: 16px; }
+  .card-front .cv-center { font-size: 16px; }
+  .card-empty { font-size: 12px; }
 }
 
 /* Stack tables vertically on narrow screens (≤ 860px) */

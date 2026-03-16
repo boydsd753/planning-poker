@@ -807,7 +807,7 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
   const isShort  = window.innerHeight < 820;
 
   // Scale factor — matches dealer formula so orbits stay tight around the table
-  const twForScale = isMobile ? Math.min(aw * 0.42, 220) : isShort ? Math.min(aw * 0.38, 210) : Math.min(aw * 0.58, 380);
+  const twForScale = isMobile ? Math.min(aw * 0.42, 220) : isShort ? Math.min(aw * 0.50, 270) : Math.min(aw * 0.58, 380);
   const sizeScale = Math.max(0.3, twForScale / 380);
 
   // Orbit radii scaled so players hug the table at all screen sizes

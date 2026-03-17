@@ -122,13 +122,31 @@ module.exports = function registerHandlers(io) {
         const voters = Object.values(room.players).filter(p => !p.isSpectator);
         if (voters.length > 0 && voters.every(p => p.card !== null)) {
           setTimeout(() => {
-            if (rooms[socket.roomCode] && !rooms[socket.roomCode].revealed) {
-              rooms[socket.roomCode].revealed = true;
-              io.to(socket.roomCode).emit('room-update', rooms[socket.roomCode]);
+            const r = rooms[socket.roomCode];
+            if (r && !r.revealed) {
+              r.revealed = true;
+              io.to(socket.roomCode).emit('room-update', r);
+              // Per-team AI card majority on auto-reveal
+              const activeIssue = r.issues.find(i => i.id === r.activeIssueId);
+              if (activeIssue?.jiraKey && r.jiraSessionId) {
+                const devV   = Object.values(r.players).filter(p => !p.isSpectator && p.role === 'dev' && p.card !== null);
+                const qaV    = Object.values(r.players).filter(p => !p.isSpectator && p.role === 'qa'  && p.card !== null);
+                const dAiMaj = devV.length > 0 && devV.filter(p => p.card === '__ai__').length > devV.length / 2;
+                const qAiMaj = qaV.length  > 0 && qaV.filter(p => p.card === '__ai__').length  > qaV.length  / 2;
+                const dDone  = activeIssue.aiEstimatedDev || activeIssue.aiEstimated;
+                const qDone  = activeIssue.aiEstimatedQa  || activeIssue.aiEstimated;
+                const t      = (dAiMaj && !dDone && qAiMaj && !qDone) ? 'both'
+                             : (dAiMaj && !dDone) ? 'dev' : (qAiMaj && !qDone) ? 'qa' : null;
+                if (t) {
+                  const pc = t === 'both' ? devV.length + qaV.length : t === 'dev' ? devV.length : qaV.length;
+                  io.to(socket.roomCode).emit('ai-card-majority', { issueKey: activeIssue.jiraKey, playerCount: pc, team: t });
+                }
+              }
             }
           }, 800);
         }
       }
+
     });
 
     socket.on('reveal-cards', () => {
@@ -139,6 +157,25 @@ module.exports = function registerHandlers(io) {
       if (!canReveal) return;
       room.revealed = true;
       io.to(socket.roomCode).emit('room-update', room);
+
+      // Per-team AI card majority check
+      const activeIssue = room.issues.find(i => i.id === room.activeIssueId);
+      if (activeIssue?.jiraKey && room.jiraSessionId) {
+        const devVoters = Object.values(room.players).filter(p => !p.isSpectator && p.role === 'dev' && p.card !== null);
+        const qaVoters  = Object.values(room.players).filter(p => !p.isSpectator && p.role === 'qa'  && p.card !== null);
+        const devAiMaj  = devVoters.length > 0 && devVoters.filter(p => p.card === '__ai__').length > devVoters.length / 2;
+        const qaAiMaj   = qaVoters.length  > 0 && qaVoters.filter(p => p.card === '__ai__').length  > qaVoters.length  / 2;
+        const devDone   = activeIssue.aiEstimatedDev || activeIssue.aiEstimated;
+        const qaDone    = activeIssue.aiEstimatedQa  || activeIssue.aiEstimated;
+        const team      = (devAiMaj && !devDone && qaAiMaj && !qaDone) ? 'both'
+                        : (devAiMaj && !devDone) ? 'dev'
+                        : (qaAiMaj  && !qaDone)  ? 'qa' : null;
+        if (team) {
+          const playerCount = team === 'both' ? devVoters.length + qaVoters.length
+                            : team === 'dev'  ? devVoters.length : qaVoters.length;
+          io.to(socket.roomCode).emit('ai-card-majority', { issueKey: activeIssue.jiraKey, playerCount, team });
+        }
+      }
     });
 
     socket.on('new-round', () => {
@@ -281,36 +318,41 @@ module.exports = function registerHandlers(io) {
     });
 
     // ── AI Estimation ──────────────────────────────────────────────────────────
-    socket.on('ai-estimate', async ({ issueKey, jiraSessionId }) => {
+    socket.on('ai-estimate', async ({ issueKey, jiraSessionId, team = 'both' }) => {
       const room = rooms[socket.roomCode];
       if (!room) return;
       const player = room.players[socket.id];
       if (!player?.isAdmin) return;
 
-      const session = jiraSessions[jiraSessionId];
+      const session = jiraSessions[jiraSessionId] || jiraSessions[room.jiraSessionId];
       if (!session) { socket.emit('ai-estimate-error', { error: 'Not authenticated with Jira' }); return; }
 
+      const validTeam = ['dev','qa','both'].includes(team) ? team : 'both';
       const issue = room.issues.find(i => i.jiraKey === issueKey);
-      if (issue?.aiEstimated) { socket.emit('ai-estimate-error', { error: 'AI estimate already run for this ticket' }); return; }
 
-      // Tell everyone loading has started
+      // Guard per-team: skip if already done for requested team (support legacy aiEstimated flag too)
+      const devDone = issue?.aiEstimatedDev || issue?.aiEstimated;
+      const qaDone  = issue?.aiEstimatedQa  || issue?.aiEstimated;
+      if (validTeam === 'dev'  && devDone) { socket.emit('ai-estimate-error', { error: 'Dev AI estimate already run' }); return; }
+      if (validTeam === 'qa'   && qaDone)  { socket.emit('ai-estimate-error', { error: 'QA AI estimate already run' });  return; }
+      if (validTeam === 'both' && devDone && qaDone) { socket.emit('ai-estimate-error', { error: 'AI estimates already run for this ticket' }); return; }
+
       io.to(socket.roomCode).emit('ai-estimate-loading');
 
       try {
-        const result = await estimateIssue(session, issueKey);
+        const result = await estimateIssue(session, issueKey, validTeam);
 
-        // Save into room state so it persists
         if (issue) {
-          issue.devEstimate      = String(result.dev);
-          issue.qaEstimate       = String(result.qa);
-          issue.originalEstimate = String(result.dev + result.qa);
-          issue.aiEstimated      = true;
+          if (result.dev !== null) { issue.devEstimate = String(result.dev); issue.aiEstimatedDev = true; }
+          if (result.qa  !== null) { issue.qaEstimate  = String(result.qa);  issue.aiEstimatedQa  = true; }
+          if (issue.aiEstimatedDev && issue.aiEstimatedQa) {
+            issue.originalEstimate = String((Number(issue.devEstimate) || 0) + (Number(issue.qaEstimate) || 0));
+          }
         }
 
-        // Broadcast result + updated room to everyone
         io.to(socket.roomCode).emit('ai-estimate-result', result);
         io.to(socket.roomCode).emit('room-update', room);
-        console.log(`[ai-estimate] ${issueKey} → dev:${result.dev}h qa:${result.qa}h`);
+        console.log(`[ai-estimate] ${issueKey} team:${validTeam} → dev:${result.dev}h qa:${result.qa}h`);
       } catch (err) {
         console.error('[ai-estimate] error:', err.message);
         io.to(socket.roomCode).emit('ai-estimate-error', { error: err.message });

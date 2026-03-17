@@ -100,7 +100,7 @@ function jiraFetch(session, apiPath) {
   return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'GET', fullPath, null);
 }
 
-async function estimateIssue(session, issueKey) {
+async function estimateIssue(session, issueKey, team = 'both') {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('AI estimation not configured');
 
   const { status, body } = await jiraFetch(session, `/rest/api/3/issue/${issueKey}?fields=*all`);
@@ -158,7 +158,21 @@ ATTACHMENTS: ${attachments}
 RECENT COMMENTS:
 ${comments.slice(0, 1500) || 'none'}
 
-Estimate hours for:
+${team === 'dev' ? `Estimate hours for:
+1. Dev hours only — implementation + unit tests + code review. Simple text/styling changes = 1-4h. Standard feature = 4-16h. Complex new system = 16-40h.
+
+Respond in this exact JSON format only, no other text:
+{
+  "dev": <number>,
+  "reasoning": "<2-3 sentence explanation>"
+}` : team === 'qa' ? `Estimate hours for:
+1. QA hours only — test planning, execution, regression, bug verification. Typically 25-50% of dev hours. Simple changes = 0.5-2h. Standard = 2-8h.
+
+Respond in this exact JSON format only, no other text:
+{
+  "qa": <number>,
+  "reasoning": "<2-3 sentence explanation>"
+}` : `Estimate hours for:
 1. Dev hours — implementation + unit tests + code review. Simple text/styling changes = 1-4h. Standard feature = 4-16h. Complex new system = 16-40h.
 2. QA hours — typically 25-50% of dev hours. Simple changes = 0.5-2h. Standard = 2-8h.
 
@@ -167,7 +181,7 @@ Respond in this exact JSON format only, no other text:
   "dev": <number>,
   "qa": <number>,
   "reasoning": "<2-3 sentence explanation>"
-}`;
+}`}`;
 
   const message = await anthropic.messages.create({
     model:      'claude-sonnet-4-6',
@@ -184,9 +198,10 @@ Respond in this exact JSON format only, no other text:
   }
 
   return {
-    dev:       Number(parsed.dev) || 0,
-    qa:        Number(parsed.qa)  || 0,
+    dev:       team !== 'qa'  ? (Number(parsed.dev) || 0) : null,
+    qa:        team !== 'dev' ? (Number(parsed.qa)  || 0) : null,
     reasoning: String(parsed.reasoning || ''),
+    team,
   };
 }
 

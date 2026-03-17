@@ -18,7 +18,9 @@ const ICON_SPARKLES = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
 const ICON_USER     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>`;
 
 function cardDisplay(val) {
-  return val === '☕' ? ICON_BREAK : escHtml(val);
+  if (val === '☕') return ICON_BREAK;
+  if (val === '__ai__') return ICON_SPARKLES;
+  return escHtml(val);
 }
 
 // ── Custom dropdowns & segmented controls ────────────────────────────────
@@ -366,6 +368,15 @@ socket.on('room-update', (room) => {
 
   syncTimer(room.timer);
 
+  if (justRevealed) {
+    const voters     = Object.values(room.players).filter(p => !p.isSpectator);
+    const devCount   = voters.filter(p => p.role === 'dev').length;
+    const qaCount    = voters.filter(p => p.role === 'qa').length;
+    const flipMs     = (Math.max(devCount, qaCount, 1) - 1) * 140 + 650;
+    const countdownMs = room.settings?.countdown ? 3 * 900 : 0;
+    setTimeout(() => toggleSidebar(true), countdownMs + flipMs);
+  }
+
   if (justRevealed && room.settings?.countdown) {
     doCountdown(() => render(room, true, prevPlayerIdsSnap));
   } else {
@@ -374,6 +385,14 @@ socket.on('room-update', (room) => {
 });
 
 socket.on('error-msg', (msg) => { landingError.textContent = msg; });
+
+socket.on('ai-card-majority', ({ issueKey, playerCount, team }) => {
+  const countdownMs = currentRoom?.settings?.countdown ? 3 * 900 : 0;
+  const flipMs = (playerCount * 140) + 650;
+  setTimeout(() => {
+    socket.emit('ai-estimate', { issueKey, jiraSessionId: jiraSession || null, team });
+  }, countdownMs + flipMs);
+});
 
 function setAiLoading(loading) {
   const btn  = $('btn-ai-estimate');
@@ -389,38 +408,46 @@ function setAiLoading(loading) {
 
 socket.on('ai-estimate-loading', () => setAiLoading(true));
 
-socket.on('ai-estimate-result', ({ dev, qa, reasoning }) => {
+socket.on('ai-estimate-result', ({ dev, qa, reasoning, team }) => {
   setAiLoading(false);
 
-  // Update local map so re-render uses the AI values
   if (jiraEstIssueId && jiraEstMap[jiraEstIssueId]) {
-    jiraEstMap[jiraEstIssueId].dev      = String(dev);
-    jiraEstMap[jiraEstIssueId].qa       = String(qa);
-    jiraEstMap[jiraEstIssueId].original = String(dev + qa);
+    if (dev !== null && dev !== undefined) jiraEstMap[jiraEstIssueId].dev = String(dev);
+    if (qa  !== null && qa  !== undefined) jiraEstMap[jiraEstIssueId].qa  = String(qa);
+    const d = Number(jiraEstMap[jiraEstIssueId].dev);
+    const q = Number(jiraEstMap[jiraEstIssueId].qa);
+    if (!isNaN(d) && !isNaN(q) && jiraEstMap[jiraEstIssueId].dev && jiraEstMap[jiraEstIssueId].qa) {
+      jiraEstMap[jiraEstIssueId].original = String(d + q);
+    }
   }
-  if (jiraEstIssueId) jiraReasoningMap[jiraEstIssueId] = reasoning || null;
+  if (jiraEstIssueId && reasoning) {
+    if (!jiraReasoningMap[jiraEstIssueId]) jiraReasoningMap[jiraEstIssueId] = {};
+    if (team === 'both') {
+      jiraReasoningMap[jiraEstIssueId].both = reasoning;
+    } else if (team === 'dev') {
+      jiraReasoningMap[jiraEstIssueId].dev = reasoning;
+    } else if (team === 'qa') {
+      jiraReasoningMap[jiraEstIssueId].qa = reasoning;
+    }
+  }
+  if (jiraEstIssueId) {
+    if (!aiFilledFields[jiraEstIssueId]) aiFilledFields[jiraEstIssueId] = new Set();
+    if (dev !== null && dev !== undefined) aiFilledFields[jiraEstIssueId].add('dev');
+    if (qa  !== null && qa  !== undefined) aiFilledFields[jiraEstIssueId].add('qa');
+    if (dev !== null && dev !== undefined && qa !== null && qa !== undefined) aiFilledFields[jiraEstIssueId].add('original');
+  }
 
-  // Animate fill on current inputs (room-update will re-render with correct values)
   const devEl  = $('est-dev');
   const qaEl   = $('est-qa');
   const origEl = $('est-original');
-  // Mark this issue as AI-filled so every re-render keeps the ring
-  if (jiraEstIssueId) aiFilledSet.add(jiraEstIssueId);
 
-  if (devEl)  { devEl.value  = dev;      devEl.classList.add('ai-filled'); }
-  if (qaEl)   { qaEl.value   = qa;       qaEl.classList.add('ai-filled'); }
-  if (origEl) { origEl.value = dev + qa; origEl.classList.add('ai-filled'); }
-
-  const reasoningWrap = $('ai-reasoning-wrap');
-  const reasoningEl   = $('ai-reasoning');
-  if (reasoningEl && reasoning) {
-    reasoningEl.textContent = reasoning;
-    reasoningWrap?.classList.remove('hidden');
-    reasoningEl.addEventListener('scroll', () => {
-      const atBottom = reasoningEl.scrollHeight - reasoningEl.scrollTop <= reasoningEl.clientHeight + 2;
-      reasoningWrap?.classList.toggle('scrolled-to-bottom', atBottom);
-    }, { passive: true });
+  if (dev !== null && dev !== undefined && devEl)  { devEl.value  = dev; devEl.classList.add('ai-filled'); }
+  if (qa  !== null && qa  !== undefined && qaEl)   { qaEl.value   = qa;  qaEl.classList.add('ai-filled'); }
+  if (dev !== null && dev !== undefined && qa !== null && qa !== undefined && origEl) {
+    origEl.value = dev + qa; origEl.classList.add('ai-filled');
   }
+
+  if (jiraEstIssueId) renderReasoningBox(jiraEstIssueId);
 
   const btn = $('btn-ai-estimate');
   if (btn) {
@@ -1184,6 +1211,29 @@ function renderTicketModal(d) {
   }
 }
 
+function buildReasoningHtml(r) {
+  if (!r) return '';
+  if (r.both) return escHtml(r.both);
+  const parts = [];
+  if (r.dev) parts.push(`<span class="ai-reasoning-label">Dev</span>${escHtml(r.dev)}`);
+  if (r.qa)  parts.push(`<span class="ai-reasoning-label">QA</span>${escHtml(r.qa)}`);
+  return parts.join('<hr class="ai-reasoning-divider">');
+}
+
+function renderReasoningBox(issueId) {
+  const wrap = $('ai-reasoning-wrap');
+  const el   = $('ai-reasoning');
+  if (!wrap || !el) return;
+  const r = jiraReasoningMap[issueId];
+  if (!r || (!r.both && !r.dev && !r.qa)) { wrap.classList.add('hidden'); return; }
+  el.innerHTML = buildReasoningHtml(r);
+  wrap.classList.remove('hidden');
+  el.addEventListener('scroll', () => {
+    const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 2;
+    wrap.classList.toggle('scrolled-to-bottom', atBottom);
+  }, { passive: true });
+}
+
 function openReasoningModal(reasoning) {
   document.getElementById('reasoning-modal')?.remove();
   const overlay = document.createElement('div');
@@ -1195,7 +1245,7 @@ function openReasoningModal(reasoning) {
         <span class="reasoning-modal-title">${ICON_SPARKLES} AI Estimate Reasoning</span>
         <button class="reasoning-modal-close">✕</button>
       </div>
-      <div class="reasoning-modal-body">${escHtml(reasoning)}</div>
+      <div class="reasoning-modal-body">${reasoning}</div>
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -1379,6 +1429,18 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
   renderTeamPlayers(qaPlayers,  room.revealed, animateFlip, 'qa',  oldPlayerIds);
   renderSpectators(players.filter(p => p.isSpectator));
   prevVotedIds = incomingVotedIds; // update after render so next call can diff
+
+  // Mirror top votes onto the active issue BEFORE renderIssues so the issue list shows them
+  if (room.revealed && room.activeIssueId) {
+    const activeIssueForVotes = (room.issues || []).find(i => i.id === room.activeIssueId);
+    if (activeIssueForVotes?.jiraKey) {
+      const devTopV = getTopVote(players.filter(p => p.role === 'dev'));
+      const qaTopV  = getTopVote(players.filter(p => p.role === 'qa'));
+      if (devTopV) activeIssueForVotes.devEstimate = devTopV;
+      if (qaTopV)  activeIssueForVotes.qaEstimate  = qaTopV;
+    }
+  }
+
   renderIssues(room.issues || [], room.activeIssueId);
   renderEstimatePanel(room, isAdmin);
 
@@ -1442,6 +1504,8 @@ function sizeTables() {
   });
 }
 
+const AI_CARD_VALUE = '__ai__';
+
 function renderCardPicker(revealed, me, deckKey) {
   const cards = deckKey === 'custom'
     ? (currentRoom?.settings?.customDeck?.length ? currentRoom.settings.customDeck : DECKS.fibonacci)
@@ -1456,6 +1520,23 @@ function renderCardPicker(revealed, me, deckKey) {
     btn.addEventListener('click', () => { if (!revealed) socket.emit('select-card', { card: val }); });
     cardsRow.appendChild(btn);
   });
+
+  // AI card — shown when the room has a Jira session linked and this player's team hasn't been AI-estimated
+  const activeIssue = (currentRoom?.issues || []).find(i => i.id === currentRoom?.activeIssueId);
+  const myRole      = me?.role;
+  const devDone     = activeIssue?.aiEstimatedDev || activeIssue?.aiEstimated;
+  const qaDone      = activeIssue?.aiEstimatedQa  || activeIssue?.aiEstimated;
+  const myTeamDone  = myRole === 'qa' ? qaDone : devDone;
+  if ((jiraSession || currentRoom?.jiraSessionId) && activeIssue?.jiraKey && !myTeamDone) {
+    const aiBtn = document.createElement('button');
+    aiBtn.className = 'pick-card ai-card';
+    aiBtn.title = 'Vote for AI Estimator — majority triggers it!';
+    aiBtn.innerHTML = `${ICON_SPARKLES}<span class="ai-card-label">AI</span><span class="ai-card-spark">✦</span><span class="ai-card-spark2">✦</span>`;
+    if (me?.card === AI_CARD_VALUE) aiBtn.classList.add('selected');
+    if (revealed) aiBtn.disabled = true;
+    aiBtn.addEventListener('click', () => { if (!revealed) socket.emit('select-card', { card: AI_CARD_VALUE }); });
+    cardsRow.appendChild(aiBtn);
+  }
 }
 
 // Distribute N players over a 300° arc (leaving 60° gap at top for dealer)
@@ -1531,7 +1612,12 @@ function renderTeamPlayers(teamPlayers, revealed, animateFlip, team, oldPlayerId
     front.className = 'card-face card-front';
     if (revealed && hasVoted) {
       const v = player.card;
-      front.innerHTML = `<span class="cv-center">${cardDisplay(v)}</span>`;
+      if (v === AI_CARD_VALUE) {
+        front.classList.add('ai-card');
+        front.innerHTML = `${ICON_SPARKLES}<span class="ai-card-label">AI</span><span class="ai-card-spark">✦</span><span class="ai-card-spark2">✦</span>`;
+      } else {
+        front.innerHTML = `<span class="cv-center">${cardDisplay(v)}</span>`;
+      }
     }
 
     inner.appendChild(back);
@@ -1661,7 +1747,7 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
     return;
   }
 
-  const voted = voters.filter(p => p.card !== null);
+  const voted = voters.filter(p => p.card !== null && p.card !== AI_CARD_VALUE);
   const numericVotes = voted
     .map(p => p.card === '½' ? 0.5 : Number(p.card))
     .filter(n => !isNaN(n));
@@ -1734,27 +1820,25 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
   }
 
   const numericVotes = voters
+    .filter(p => p.card !== AI_CARD_VALUE)
     .map(p => p.card === '½' ? 0.5 : Number(p.card))
     .filter(n => !isNaN(n));
 
   let statsHtml = '';
   let saveHtml  = '';
 
-  if (numericVotes.length > 0) {
-    const allCards = voters.map(p => p.card);
-    const allSame  = allCards.every(c => c === allCards[0]);
-    const avg = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
-    const min = Math.min(...numericVotes);
-    const max = Math.max(...numericVotes);
+  const allCards = voters.map(p => p.card);
+  const allSame  = allCards.length > 0 && allCards.every(c => c === allCards[0]);
+
+  if (allSame) {
+    statsHtml = `<div class="results-stats"><span class="results-consensus">${ICON_SPARKLES} Consensus! — ${cardDisplay(allCards[0])}</span></div>`;
+  } else if (numericVotes.length > 0) {
+    const avg    = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
+    const min    = Math.min(...numericVotes);
+    const max    = Math.max(...numericVotes);
     const avgStr = avg % 1 === 0 ? String(avg) : avg.toFixed(1);
-
-    if (allSame) {
-      statsHtml = `<div class="results-stats"><span class="results-consensus">${ICON_SPARKLES} Consensus! — ${cardDisplay(allCards[0])}</span></div>`;
-    } else {
-      const avgPart = settings?.showAverage !== false ? `<span class="results-avg">Avg: ${avgStr}</span>` : '';
-      statsHtml = `<div class="results-stats">${avgPart}<span class="results-range">Range: ${min} – ${max}</span></div>`;
-    }
-
+    const avgPart = settings?.showAverage !== false ? `<span class="results-avg">Avg: ${avgStr}</span>` : '';
+    statsHtml = `<div class="results-stats">${avgPart}<span class="results-range">Range: ${min} – ${max}</span></div>`;
   }
 
   const groups = {};
@@ -1783,7 +1867,7 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
               <div class="vote-bar-fill${isWinner ? ' winner' : ''}" style="height:${pct}%"></div>
             </div>
           </div>
-          <div class="vote-card-mini${isWinner ? ' highlight' : ''}">${cardDisplay(val)}</div>
+          <div class="vote-card-mini${val === AI_CARD_VALUE ? ' ai-card' : (isWinner ? ' highlight' : '')}">${val === AI_CARD_VALUE ? `${ICON_SPARKLES}<span class="ai-card-label">AI</span><span class="ai-card-spark">✦</span><span class="ai-card-spark2">✦</span>` : cardDisplay(val)}</div>
           <div class="vote-names">${label}</div>
         </div>`;
     }).join('');
@@ -1798,12 +1882,12 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
 // ── Jira Estimate Panel ────────────────────────────────────────────────────
 const jiraEstimatePanel = $('jira-estimate-panel');
 const jiraEstMap      = {}; // issueId → { dev, qa, original }
-const jiraReasoningMap = {}; // issueId → reasoning string
-const aiFilledSet      = new Set(); // issueIds whose estimates were AI-generated (ring shown)
+const jiraReasoningMap = {}; // issueId → { dev?, qa?, both? }
+const aiFilledFields   = {}; // issueId → Set of field names ('dev','qa','original') that are AI-filled
 let jiraEstIssueId = null;
 
 function getTopVote(teamPlayers) {
-  const voters = teamPlayers.filter(p => !p.isSpectator && p.card !== null);
+  const voters = teamPlayers.filter(p => !p.isSpectator && p.card !== null && p.card !== AI_CARD_VALUE);
   if (!voters.length) return '';
   const counts = {};
   voters.forEach(p => { counts[p.card] = (counts[p.card] || 0) + 1; });
@@ -1845,6 +1929,10 @@ function renderEstimatePanel(room, isAdmin) {
     const devNum = parseFloat(jiraEst.dev === '½' ? 0.5 : jiraEst.dev);
     const qaNum  = parseFloat(jiraEst.qa  === '½' ? 0.5 : jiraEst.qa);
     if (!isNaN(devNum) && !isNaN(qaNum)) jiraEst.original = String(devNum + qaNum);
+
+    // Mirror onto local room issue so the issue list shows the values immediately
+    if (devTop) activeIssue.devEstimate = jiraEst.dev;
+    if (qaTop)  activeIssue.qaEstimate  = jiraEst.qa;
   }
 
   jiraEstimatePanel.classList.remove('hidden');
@@ -1853,17 +1941,31 @@ function renderEstimatePanel(room, isAdmin) {
       <span class="jira-est-key">${escHtml(activeIssue.jiraKey)}</span>
       <span class="jira-est-title">Estimates</span>
     </div>
-    ${jiraSession ? `
-    <button class="btn-ai-estimate" id="btn-ai-estimate" ${(!isAdmin || activeIssue.aiEstimated) ? 'disabled' : ''}>
-      <span class="ai-btn-icon">${ICON_SPARKLES}</span>
-      <span class="ai-btn-label">
-        <span class="ai-btn-text">${activeIssue.aiEstimated ? 'AI Estimated' : 'AI Estimator'}</span>
-        <span class="ai-btn-badge">Powered by Claude</span>
-      </span>
-    </button>
-    ` : ''}
+    ${(jiraSession || room.jiraSessionId) ? (() => {
+      const devDone  = activeIssue.aiEstimatedDev || activeIssue.aiEstimated;
+      const qaDone   = activeIssue.aiEstimatedQa  || activeIssue.aiEstimated;
+      const bothDone = devDone && qaDone;
+      const btnLabel = bothDone ? 'AI Estimated' : 'AI Estimator';
+      return `
+    <div class="ai-estimate-wrap">
+      <button class="btn-ai-estimate" id="btn-ai-estimate" ${(!isAdmin || bothDone) ? 'disabled' : ''}>
+        <span class="ai-btn-icon">${ICON_SPARKLES}</span>
+        <span class="ai-btn-label">
+          <span class="ai-btn-text">${btnLabel}</span>
+          <span class="ai-btn-badge">Powered by Claude</span>
+        </span>
+        <span class="ai-card-spark">✦</span>
+        <span class="ai-card-spark2">✦</span>
+      </button>
+      <div class="ai-team-popup hidden" id="ai-team-popup">
+        <button class="ai-team-opt${devDone ? ' ai-team-opt--done' : ''}" id="ai-opt-dev" ${devDone ? 'disabled' : ''}>${ICON_SPARKLES} Dev Hours${devDone ? ' ✓' : ''}<span class="ai-card-spark">✦</span><span class="ai-card-spark2">✦</span></button>
+        <button class="ai-team-opt${qaDone  ? ' ai-team-opt--done' : ''}" id="ai-opt-qa"  ${qaDone  ? 'disabled' : ''}>${ICON_SPARKLES} QA Hours${qaDone ? ' ✓' : ''}<span class="ai-card-spark">✦</span><span class="ai-card-spark2">✦</span></button>
+        <button class="ai-team-opt" id="ai-opt-both" ${bothDone ? 'disabled' : ''}>${ICON_SPARKLES} Both<span class="ai-card-spark">✦</span><span class="ai-card-spark2">✦</span></button>
+      </div>
+    </div>`;
+    })() : ''}
     <div class="ai-reasoning-wrap${jiraReasoningMap[activeIssue.id] ? '' : ' hidden'}" id="ai-reasoning-wrap">
-      <div class="ai-reasoning" id="ai-reasoning">${jiraReasoningMap[activeIssue.id] ? escHtml(jiraReasoningMap[activeIssue.id]) : ''}</div>
+      <div class="ai-reasoning" id="ai-reasoning">${buildReasoningHtml(jiraReasoningMap[activeIssue.id])}</div>
       <div class="ai-reasoning-fade" id="ai-reasoning-fade"></div>
     </div>
     <div class="jira-est-fields">
@@ -1883,37 +1985,51 @@ function renderEstimatePanel(room, isAdmin) {
     ${isAdmin ? `<button class="btn-save-jira" id="btn-save-jira">Save to Jira</button>` : ''}
   `;
 
-  // Apply AI-filled ring if this issue was AI-estimated
-  if (aiFilledSet.has(activeIssue.id)) {
-    [$('est-dev'), $('est-qa'), $('est-original')].forEach(el => {
-      if (el) el.classList.add('ai-filled');
-    });
-  }
+  // Apply AI-filled ring per field
+  const filledFields = aiFilledFields[activeIssue.id] || new Set();
+  ['dev','qa','original'].forEach(key => {
+    const el = $(`est-${key}`);
+    if (el && filledFields.has(key)) el.classList.add('ai-filled');
+  });
 
   // Wire reasoning expand — must be done after innerHTML re-render
   const reasoningWrap = $('ai-reasoning-wrap');
   if (reasoningWrap && jiraReasoningMap[activeIssue.id]) {
-    reasoningWrap.addEventListener('click', () => openReasoningModal(jiraReasoningMap[activeIssue.id]));
+    reasoningWrap.addEventListener('click', () => openReasoningModal(buildReasoningHtml(jiraReasoningMap[activeIssue.id])));
   }
 
-  // Keep local state in sync as user edits; clear ring on manual edit
+  // Keep local state in sync as user edits; clear ring on manual edit per field
   ['dev','qa','original'].forEach(key => {
     const el = $(`est-${key}`);
     if (!el) return;
     el.addEventListener('input', () => {
       jiraEst[key] = el.value;
       el.classList.remove('ai-filled');
-      if (![$('est-dev'), $('est-qa'), $('est-original')].some(e => e?.classList.contains('ai-filled'))) {
-        aiFilledSet.delete(activeIssue.id);
-      }
+      aiFilledFields[activeIssue.id]?.delete(key);
     });
   });
 
-  const aiBtn = $('btn-ai-estimate');
-  if (aiBtn) {
-    aiBtn.addEventListener('click', () => {
-      socket.emit('ai-estimate', { issueKey: activeIssue.jiraKey, jiraSessionId: jiraSession });
+  const aiBtn   = $('btn-ai-estimate');
+  const aiPopup = $('ai-team-popup');
+  if (aiBtn && aiPopup) {
+    aiBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      aiPopup.classList.toggle('hidden');
     });
+    const emitEstimate = team => {
+      aiPopup.classList.add('hidden');
+      socket.emit('ai-estimate', { issueKey: activeIssue.jiraKey, jiraSessionId: jiraSession || null, team });
+    };
+    $('ai-opt-dev')?.addEventListener('click',  () => emitEstimate('dev'));
+    $('ai-opt-qa')?.addEventListener('click',   () => emitEstimate('qa'));
+    $('ai-opt-both')?.addEventListener('click', () => emitEstimate('both'));
+    const closePopup = e => {
+      if (!aiPopup.contains(e.target) && e.target !== aiBtn) {
+        aiPopup.classList.add('hidden');
+        document.removeEventListener('click', closePopup);
+      }
+    };
+    document.addEventListener('click', closePopup);
   }
 
   const saveBtn = $('btn-save-jira');

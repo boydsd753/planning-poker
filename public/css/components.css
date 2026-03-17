@@ -342,6 +342,32 @@
   color: #08112e;
 }
 .card-front .cv-center { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
+.card-front.ai-card {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  border-color: rgba(130,100,255,0.5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 14px 3px rgba(130,100,255,0.35);
+  color: white;
+  flex-direction: column; gap: 3px;
+  animation: aiCardGlow 2.4s ease-in-out infinite;
+  overflow: visible;
+}
+.card-front.ai-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(160,120,255,0.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: aiCardShimmer 2.2s linear infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.card-front.ai-card::after {
+  content: '✦';
+  position: absolute; top: 4px; right: 4px;
+  font-size: 6px; color: rgba(200,170,255,0.9);
+  animation: aiSparkle1 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.card-front.ai-card svg { width: 16px; height: 16px; }
 
 /* Spectators layer — centered between the two tables */
 .spectators-layer {
@@ -570,6 +596,86 @@
 }
 .pick-card:disabled { opacity: 0.3; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 
+/* ── AI card ─────────────────────────────────────────────────────────────── */
+@keyframes aiCardShimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+@keyframes aiCardGlow {
+  0%, 100% { box-shadow: 0 2px 8px rgba(100,60,255,0.3), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 0 rgba(130,100,255,0); }
+  50%       { box-shadow: 0 2px 8px rgba(100,60,255,0.5), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 14px 3px rgba(130,100,255,0.35); }
+}
+@keyframes aiSparkle1 {
+  0%,100% { opacity: 0; transform: translate(0,0) scale(0); }
+  20%     { opacity: 1; transform: translate(-6px,-8px) scale(1); }
+  50%     { opacity: 0.6; transform: translate(-8px,-14px) scale(0.7); }
+  80%     { opacity: 0; transform: translate(-10px,-18px) scale(0); }
+}
+@keyframes aiSparkle2 {
+  0%,100% { opacity: 0; transform: translate(0,0) scale(0); }
+  25%     { opacity: 1; transform: translate(8px,-6px) scale(0.8); }
+  60%     { opacity: 0.5; transform: translate(12px,-12px) scale(0.5); }
+  85%     { opacity: 0; transform: translate(14px,-16px) scale(0); }
+}
+@keyframes aiSparkle3 {
+  0%,100% { opacity: 0; transform: translate(0,0) scale(0); }
+  30%     { opacity: 1; transform: translate(5px,7px) scale(0.9); }
+  65%     { opacity: 0.4; transform: translate(8px,13px) scale(0.5); }
+  90%     { opacity: 0; transform: translate(10px,17px) scale(0); }
+}
+
+.pick-card.ai-card {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  color: white;
+  border-color: rgba(130, 100, 255, 0.5);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  animation: aiCardGlow 2.4s ease-in-out infinite;
+  overflow: visible;
+}
+/* Shimmer sweep across the card */
+.pick-card.ai-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(160,120,255,0.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: aiCardShimmer 2.2s linear infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+/* Sparkle dots */
+.pick-card.ai-card::after {
+  content: '✦';
+  position: absolute; top: 6px; right: 5px;
+  font-size: 7px; color: rgba(200,170,255,0.9);
+  animation: aiSparkle1 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.ai-card-spark {
+  position: absolute; bottom: 8px; left: 6px;
+  font-size: 6px; color: rgba(180,150,255,0.85);
+  animation: aiSparkle2 3.2s ease-in-out infinite 0.6s;
+  pointer-events: none;
+}
+.ai-card-spark2 {
+  position: absolute; top: 10px; left: 8px;
+  font-size: 5px; color: rgba(220,190,255,0.75);
+  animation: aiSparkle3 2.6s ease-in-out infinite 1.1s;
+  pointer-events: none;
+}
+.pick-card.ai-card svg { width: 20px; height: 20px; }
+.ai-card-label { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; opacity: 0.9; }
+.pick-card.ai-card:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e1e38 0%, #1a2548 40%, #123870 100%);
+  border-color: rgba(130,100,255,0.8);
+  box-shadow: 0 16px 32px rgba(100,60,255,0.35), 0 4px 10px rgba(100,60,255,0.2);
+}
+.pick-card.ai-card.selected {
+  background: linear-gradient(135deg, #2a1a4e 0%, #1e2a5e 40%, #1a3a70 100%);
+  border-color: rgba(130,100,255,0.9);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 20px 36px rgba(100,60,255,0.45), 0 6px 12px rgba(100,60,255,0.3);
+  animation: none;
+}
+
 /* ── Results panel ───────────────────────────────────────────────────────── */
 #results-panel { padding: 2px 0 4px; }
 #results-content { display: flex; flex-direction: column; gap: 8px; }
@@ -614,6 +720,7 @@
 .vote-bar-fill.winner { background: #3448ff; }
 
 .vote-card-mini {
+  position: relative;
   width: 40px; height: 56px; border-radius: 10px;
   background: rgba(255,255,255,0.82);
   backdrop-filter: blur(16px) saturate(180%);
@@ -638,6 +745,34 @@
   border-color: rgba(52,72,255,0.5);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 3px 12px rgba(52,72,255,0.28);
 }
+.vote-card-mini.ai-card {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  color: white;
+  border-color: rgba(130,100,255,0.5);
+  flex-direction: column; gap: 2px;
+  overflow: visible;
+  animation: cardRevealMini 0.5s cubic-bezier(0.34,1.56,0.64,1) both, aiCardGlow 2.4s ease-in-out infinite 0.5s;
+}
+.vote-card-mini.ai-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(160,120,255,0.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: aiCardShimmer 2.2s linear infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.vote-card-mini.ai-card::after {
+  content: '✦';
+  position: absolute; top: 3px; right: 4px;
+  font-size: 6px; color: rgba(200,170,255,0.9);
+  animation: aiSparkle1 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.vote-card-mini.ai-card svg { width: 14px; height: 14px; }
+.vote-card-mini.ai-card .ai-card-label { font-size: 9px; }
+.vote-card-mini.ai-card .ai-card-spark  { bottom: 4px; left: 4px; font-size: 5px; }
+.vote-card-mini.ai-card .ai-card-spark2 { top: 6px; left: 6px; font-size: 4px; }
 
 .vote-names {
   font-size: 10px; color: var(--muted); text-align: center;
@@ -903,23 +1038,37 @@
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
   color: white;
   border: 1px solid rgba(130, 100, 255, 0.4);
-  box-shadow: 0 4px 16px rgba(100, 60, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.08);
   border-radius: 10px;
   font-family: inherit; cursor: pointer;
   display: flex; align-items: center; gap: 7px;
-  position: relative; overflow: hidden;
+  position: relative; overflow: visible;
   transition: box-shadow 0.3s, opacity 0.2s;
+  animation: aiCardGlow 2.4s ease-in-out infinite;
 }
+/* Shimmer sweep */
 .btn-ai-estimate::before {
   content: '';
   position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(130,100,255,0.15) 50%, transparent 100%);
-  transform: translateX(-100%);
-  transition: transform 0.6s ease;
+  background: linear-gradient(105deg, transparent 30%, rgba(160,120,255,0.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: aiCardShimmer 2.2s linear infinite;
+  border-radius: inherit;
+  pointer-events: none;
 }
-.btn-ai-estimate:hover:not(:disabled)::before { transform: translateX(100%); }
+/* Top-right sparkle dot */
+.btn-ai-estimate::after {
+  content: '✦';
+  position: absolute; top: 5px; right: 8px;
+  font-size: 8px; color: rgba(200,170,255,0.9);
+  animation: aiSparkle1 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
 .btn-ai-estimate:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(100,60,255,0.45), inset 0 1px 0 rgba(255,255,255,0.1); }
-.btn-ai-estimate:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-ai-estimate:disabled { opacity: 0.6; cursor: not-allowed; animation: none; }
+.btn-ai-estimate:disabled::before { animation: none; }
+.btn-ai-estimate:disabled::after { display: none; }
+.btn-ai-estimate .ai-card-spark  { bottom: 6px; left: 10px; font-size: 8px; }
+.btn-ai-estimate .ai-card-spark2 { top: 8px; left: 50%; font-size: 7px; }
 
 .ai-btn-icon { flex-shrink: 0; opacity: 0.9; }
 .ai-btn-label { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; flex: 1; }
@@ -930,7 +1079,10 @@
 }
 
 /* Loading shimmer */
-.btn-ai-estimate.ai-loading { pointer-events: none; }
+.btn-ai-estimate.ai-loading { pointer-events: none; animation: none; }
+.btn-ai-estimate.ai-loading .ai-card-spark,
+.btn-ai-estimate.ai-loading .ai-card-spark2 { display: none; }
+.btn-ai-estimate.ai-loading::after { display: none; }
 .btn-ai-estimate.ai-loading::before {
   background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%);
   transform: translateX(-100%);
@@ -946,6 +1098,92 @@
   to   { transform: rotate(360deg); }
 }
 
+/* ── AI Team Picker Popup ─────────────────────────────────────────────────── */
+.ai-estimate-wrap { position: relative; }
+
+@keyframes aiPopupIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.ai-team-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0; right: 0;
+  z-index: 300;
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border: 1px solid rgba(130,100,255,0.45);
+  box-shadow: 0 8px 32px rgba(8,17,46,0.35), 0 0 0 1px rgba(255,255,255,0.06) inset, 0 12px 40px rgba(100,60,255,0.2);
+  border-radius: 14px;
+  padding: 6px;
+  display: flex; flex-direction: column; gap: 3px;
+  animation: aiPopupIn 0.18s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.ai-team-popup.hidden { display: none; }
+
+/* Popup shimmer overlay */
+.ai-team-popup::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(160,120,255,0.08) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: aiCardShimmer 3s linear infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.ai-team-opt {
+  width: 100%; padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(130,100,255,0.4);
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  color: white;
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  cursor: pointer; letter-spacing: 0.01em;
+  display: flex; align-items: center; gap: 7px;
+  text-align: left;
+  position: relative; overflow: visible;
+  animation: aiCardGlow 2.4s ease-in-out infinite;
+  transition: box-shadow 0.2s;
+}
+/* Each option staggers the glow so they pulse at different times */
+#ai-opt-qa   { animation-delay: 0.8s; }
+#ai-opt-both { animation-delay: 1.6s; }
+
+/* Shimmer sweep */
+.ai-team-opt::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(160,120,255,0.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: aiCardShimmer 2.2s linear infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+/* Top-right sparkle */
+.ai-team-opt::after {
+  content: '✦';
+  position: absolute; top: 5px; right: 8px;
+  font-size: 7px; color: rgba(200,170,255,0.9);
+  animation: aiSparkle1 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.ai-team-opt:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(100,60,255,0.4);
+}
+.ai-team-opt--done {
+  opacity: 0.45;
+  cursor: not-allowed;
+  animation: none;
+}
+.ai-team-opt--done::before,
+.ai-team-opt--done::after { display: none; }
+.ai-team-opt--done .ai-card-spark,
+.ai-team-opt--done .ai-card-spark2 { display: none; }
+.ai-team-opt:disabled { cursor: not-allowed; }
+.ai-team-opt .ai-card-spark  { bottom: 5px; left: 8px; font-size: 7px; }
+.ai-team-opt .ai-card-spark2 { top: 7px; left: 45%; font-size: 6px; }
+
+/* ── Done flash ─────────────────────────────────────────────────────────────── */
 /* Done flash */
 .btn-ai-estimate.ai-done {
   box-shadow: 0 4px 24px rgba(100,255,160,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
@@ -954,12 +1192,11 @@
 
 /* AI-filled pulsing ring */
 @keyframes aiRingPulse {
-  0%   { box-shadow: 0 0 0 0    rgba(130,100,255,0.9), 0 0 0 0   rgba(130,100,255,0.4); border-color: rgba(130,100,255,0.9); }
-  60%  { box-shadow: 0 0 0 6px  rgba(130,100,255,0.2), 0 0 16px 4px rgba(130,100,255,0.2); border-color: rgba(130,100,255,0.6); }
-  100% { box-shadow: 0 0 0 10px rgba(130,100,255,0),   0 0 24px 8px rgba(130,100,255,0); border-color: rgba(130,100,255,0.9); }
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 1px rgba(130,100,255,0.5), 0 0 6px 0 rgba(130,100,255,0.2); border-color: rgba(130,100,255,0.55); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 3px rgba(130,100,255,0.2), 0 0 14px 4px rgba(130,100,255,0.35); border-color: rgba(130,100,255,0.9); }
 }
 .jira-est-input.ai-filled {
-  animation: aiRingPulse 2s ease-out infinite;
+  animation: aiRingPulse 2.4s ease-in-out infinite;
   outline: none;
 }
 
@@ -992,6 +1229,17 @@
 .ai-reasoning-wrap.scrolled-to-bottom .ai-reasoning-fade { opacity: 0; }
 .ai-reasoning-wrap:hover .ai-reasoning { border-color: rgba(130,100,255,0.4); }
 .ai-reasoning-wrap:hover .ai-reasoning { border-color: rgba(130,100,255,0.5); }
+
+.ai-reasoning-label {
+  display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: rgba(160,130,255,0.85);
+  background: rgba(130,100,255,0.12); border: 1px solid rgba(130,100,255,0.25);
+  padding: 1px 6px; border-radius: 4px; margin-bottom: 4px;
+}
+.ai-reasoning-divider {
+  border: none; border-top: 1px solid rgba(130,100,255,0.2);
+  margin: 8px 0;
+}
 
 /* ── AI Reasoning fullscreen modal ─────────────────────────────────────────── */
 .reasoning-modal-overlay {

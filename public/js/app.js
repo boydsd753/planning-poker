@@ -390,6 +390,8 @@ socket.on('ai-card-majority', ({ issueKey, playerCount, team }) => {
   const countdownMs = currentRoom?.settings?.countdown ? 3 * 900 : 0;
   const flipMs = (playerCount * 140) + 650;
   setTimeout(() => {
+    startAiTableAnim(team);
+    setAiLoading(true);
     socket.emit('ai-estimate', { issueKey, jiraSessionId: jiraSession || null, team });
   }, countdownMs + flipMs);
 });
@@ -406,10 +408,71 @@ function setAiLoading(loading) {
   jiraEstimatePanel?.classList.toggle('ai-panel-loading', loading);
 }
 
-socket.on('ai-estimate-loading', () => setAiLoading(true));
+function startAiTableAnim(team) {
+  const tables = [];
+  if (team === 'dev' || team === 'both') tables.push(devPokerTable);
+  if (team === 'qa'  || team === 'both') tables.push(qaPokerTable);
+  tables.forEach(table => {
+    if (!table) return;
+    // Already animating — don't double-inject
+    if (table.classList.contains('ai-thinking')) return;
+    table.classList.add('ai-thinking');
+    const surface = table.querySelector('.table-surface');
+    if (!surface) return;
 
-socket.on('ai-estimate-result', ({ dev, qa, reasoning, team }) => {
+    // Shimmer overlay inside the oval surface (clips correctly)
+    const overlay = document.createElement('div');
+    overlay.className = 'ai-table-overlay ai-table-anim-el';
+    surface.appendChild(overlay);
+
+    // "AI Estimating..." label
+    const label = document.createElement('div');
+    label.className = 'ai-table-label ai-table-anim-el';
+    label.innerHTML = `✦ AI Estimating<span class="ai-dots"></span>`;
+    surface.appendChild(label);
+
+    // 4 rising sparkle dots
+    const sparkDelays  = [0, 0.6, 1.2, 1.8];
+    const sparkSizes   = [13, 10, 11, 9];
+    const sparkPcts    = [28, 45, 62, 38];
+    const sparkOffsets = [0, 8, -10, 14];
+    for (let i = 0; i < 4; i++) {
+      const sp = document.createElement('span');
+      sp.className = 'ai-table-spark ai-table-anim-el';
+      sp.textContent = '✦';
+      sp.style.cssText = `left:${sparkPcts[i]}%; bottom:38%; font-size:${sparkSizes[i]}px; --sx:${sparkOffsets[i]}px; animation-delay:${sparkDelays[i]}s;`;
+      surface.appendChild(sp);
+    }
+  });
+}
+
+function stopAiTableAnim() {
+  [devPokerTable, qaPokerTable].forEach(table => {
+    if (!table) return;
+    table.classList.remove('ai-thinking');
+    const surface = table.querySelector('.table-surface');
+    surface?.querySelectorAll('.ai-table-anim-el').forEach(el => el.remove());
+  });
+}
+
+socket.on('ai-estimate-loading', ({ team } = {}) => {
+  setAiLoading(true);
+  startAiTableAnim(team || 'both');
+});
+
+socket.on('ai-estimate-result', ({ dev, qa, reasoning, team, insufficient }) => {
   setAiLoading(false);
+  stopAiTableAnim();
+
+  if (insufficient) {
+    // Store reasoning as a warning — don't fill fields, don't mark as estimated
+    if (jiraEstIssueId) {
+      if (!jiraReasoningMap[jiraEstIssueId]) jiraReasoningMap[jiraEstIssueId] = {};
+      jiraReasoningMap[jiraEstIssueId].insufficient = reasoning;
+      renderReasoningBox(jiraEstIssueId);
+    }
+    return;
+  }
 
   if (jiraEstIssueId && jiraEstMap[jiraEstIssueId]) {
     if (dev !== null && dev !== undefined) jiraEstMap[jiraEstIssueId].dev = String(dev);
@@ -422,6 +485,8 @@ socket.on('ai-estimate-result', ({ dev, qa, reasoning, team }) => {
   }
   if (jiraEstIssueId && reasoning) {
     if (!jiraReasoningMap[jiraEstIssueId]) jiraReasoningMap[jiraEstIssueId] = {};
+    // Clear any prior insufficient warning when a real estimate comes in
+    delete jiraReasoningMap[jiraEstIssueId].insufficient;
     if (team === 'both') {
       jiraReasoningMap[jiraEstIssueId].both = reasoning;
     } else if (team === 'dev') {
@@ -458,6 +523,7 @@ socket.on('ai-estimate-result', ({ dev, qa, reasoning, team }) => {
 
 socket.on('ai-estimate-error', ({ error }) => {
   setAiLoading(false);
+  stopAiTableAnim();
   showToast(`AI estimate failed: ${escHtml(error)}`, 'leave');
 });
 
@@ -1213,10 +1279,13 @@ function renderTicketModal(d) {
 
 function buildReasoningHtml(r) {
   if (!r) return '';
-  if (r.both) return escHtml(r.both);
+  if (r.insufficient) {
+    return `<div class="ai-reasoning-insufficient"><span class="ai-reasoning-insufficient-icon">⚠</span><span class="ai-reasoning-text">${escHtml(r.insufficient)}</span></div>`;
+  }
+  if (r.both) return `<span class="ai-reasoning-text">${escHtml(r.both)}</span>`;
   const parts = [];
-  if (r.dev) parts.push(`<span class="ai-reasoning-label">Dev</span>${escHtml(r.dev)}`);
-  if (r.qa)  parts.push(`<span class="ai-reasoning-label">QA</span>${escHtml(r.qa)}`);
+  if (r.dev) parts.push(`<div class="ai-reasoning-section"><span class="ai-reasoning-label">Dev</span><span class="ai-reasoning-text">${escHtml(r.dev)}</span></div>`);
+  if (r.qa)  parts.push(`<div class="ai-reasoning-section"><span class="ai-reasoning-label">QA</span><span class="ai-reasoning-text">${escHtml(r.qa)}</span></div>`);
   return parts.join('<hr class="ai-reasoning-divider">');
 }
 

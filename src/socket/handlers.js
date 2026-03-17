@@ -337,12 +337,12 @@ module.exports = function registerHandlers(io) {
       if (validTeam === 'qa'   && qaDone)  { socket.emit('ai-estimate-error', { error: 'QA AI estimate already run' });  return; }
       if (validTeam === 'both' && devDone && qaDone) { socket.emit('ai-estimate-error', { error: 'AI estimates already run for this ticket' }); return; }
 
-      io.to(socket.roomCode).emit('ai-estimate-loading');
+      io.to(socket.roomCode).emit('ai-estimate-loading', { team: validTeam });
 
       try {
         const result = await estimateIssue(session, issueKey, validTeam);
 
-        if (issue) {
+        if (!result.insufficient && issue) {
           if (result.dev !== null) { issue.devEstimate = String(result.dev); issue.aiEstimatedDev = true; }
           if (result.qa  !== null) { issue.qaEstimate  = String(result.qa);  issue.aiEstimatedQa  = true; }
           if (issue.aiEstimatedDev && issue.aiEstimatedQa) {
@@ -351,8 +351,8 @@ module.exports = function registerHandlers(io) {
         }
 
         io.to(socket.roomCode).emit('ai-estimate-result', result);
-        io.to(socket.roomCode).emit('room-update', room);
-        console.log(`[ai-estimate] ${issueKey} team:${validTeam} → dev:${result.dev}h qa:${result.qa}h`);
+        if (!result.insufficient) io.to(socket.roomCode).emit('room-update', room);
+        console.log(`[ai-estimate] ${issueKey} team:${validTeam} insufficient:${!!result.insufficient} → dev:${result.dev}h qa:${result.qa}h`);
       } catch (err) {
         console.error('[ai-estimate] error:', err.message);
         io.to(socket.roomCode).emit('ai-estimate-error', { error: err.message });

@@ -1230,15 +1230,31 @@
 .ai-reasoning-wrap:hover .ai-reasoning { border-color: rgba(130,100,255,0.4); }
 .ai-reasoning-wrap:hover .ai-reasoning { border-color: rgba(130,100,255,0.5); }
 
+.ai-reasoning-section {
+  display: flex; flex-direction: column; gap: 5px;
+}
 .ai-reasoning-label {
   display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.07em;
   text-transform: uppercase; color: rgba(160,130,255,0.85);
   background: rgba(130,100,255,0.12); border: 1px solid rgba(130,100,255,0.25);
-  padding: 1px 6px; border-radius: 4px; margin-bottom: 4px;
+  padding: 1px 6px; border-radius: 4px; align-self: flex-start;
+}
+.ai-reasoning-text {
+  font-size: 12px; line-height: 1.55;
 }
 .ai-reasoning-divider {
   border: none; border-top: 1px solid rgba(130,100,255,0.2);
   margin: 8px 0;
+}
+
+/* Insufficient ticket detail warning */
+.ai-reasoning-insufficient {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: rgba(200,120,0,0.1); border: 1px solid rgba(200,140,0,0.3);
+  border-radius: 8px; padding: 8px 10px;
+}
+.ai-reasoning-insufficient-icon {
+  font-size: 13px; color: rgba(230,160,0,0.9); flex-shrink: 0; margin-top: 1px;
 }
 
 /* ── AI Reasoning fullscreen modal ─────────────────────────────────────────── */

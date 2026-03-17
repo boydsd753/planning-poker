@@ -161,14 +161,20 @@ ${comments.slice(0, 1500) || 'none'}
 ${team === 'dev' ? `Estimate hours for:
 1. Dev hours only — implementation + unit tests + code review. Simple text/styling changes = 1-4h. Standard feature = 4-16h. Complex new system = 16-40h.
 
-Respond in this exact JSON format only, no other text:
+If the ticket has genuinely insufficient detail to produce a meaningful estimate (e.g. no description, no acceptance criteria, title-only with no context), respond with this format instead:
+{ "insufficient": true, "reasoning": "<1-2 sentences describing what specific information is missing>" }
+
+Otherwise respond in this exact JSON format only, no other text:
 {
   "dev": <number>,
   "reasoning": "<2-3 sentence explanation>"
 }` : team === 'qa' ? `Estimate hours for:
 1. QA hours only — test planning, execution, regression, bug verification. Typically 25-50% of dev hours. Simple changes = 0.5-2h. Standard = 2-8h.
 
-Respond in this exact JSON format only, no other text:
+If the ticket has genuinely insufficient detail to produce a meaningful estimate (e.g. no description, no acceptance criteria, title-only with no context), respond with this format instead:
+{ "insufficient": true, "reasoning": "<1-2 sentences describing what specific information is missing>" }
+
+Otherwise respond in this exact JSON format only, no other text:
 {
   "qa": <number>,
   "reasoning": "<2-3 sentence explanation>"
@@ -176,7 +182,10 @@ Respond in this exact JSON format only, no other text:
 1. Dev hours — implementation + unit tests + code review. Simple text/styling changes = 1-4h. Standard feature = 4-16h. Complex new system = 16-40h.
 2. QA hours — typically 25-50% of dev hours. Simple changes = 0.5-2h. Standard = 2-8h.
 
-Respond in this exact JSON format only, no other text:
+If the ticket has genuinely insufficient detail to produce a meaningful estimate (e.g. no description, no acceptance criteria, title-only with no context), respond with this format instead:
+{ "insufficient": true, "reasoning": "<1-2 sentences describing what specific information is missing>" }
+
+Otherwise respond in this exact JSON format only, no other text:
 {
   "dev": <number>,
   "qa": <number>,
@@ -195,6 +204,10 @@ Respond in this exact JSON format only, no other text:
     parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || text);
   } catch {
     throw new Error('AI response could not be parsed');
+  }
+
+  if (parsed.insufficient) {
+    return { insufficient: true, reasoning: String(parsed.reasoning || ''), team };
   }
 
   return {

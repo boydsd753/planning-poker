@@ -1,8 +1,12 @@
 'use strict';
 
-const { rooms }                              = require('../state');
+const { rooms, jiraSessions }                = require('../state');
 const { generateId, sanitizeSettings }       = require('../utils');
 const { generateRoomCode }                   = require('../utils');
+const { estimateIssue }                      = require('../ai');
+
+// sessionToken → { roomCode, playerData, disconnectTimer }
+const sessions = {};
 
 module.exports = function registerHandlers(io) {
 
@@ -31,7 +35,7 @@ module.exports = function registerHandlers(io) {
         dealersHidden: true,
       };
 
-      rooms[roomCode].players[socket.id] = {
+      const player = {
         id: socket.id,
         name: String(name).trim().slice(0, 20) || 'Anonymous',
         avatar: sanitizeAvatar(avatar),
@@ -40,10 +44,15 @@ module.exports = function registerHandlers(io) {
         isSpectator: Boolean(isSpectator),
         role: ['dev','qa','spectator'].includes(role) ? role : 'dev',
       };
+      rooms[roomCode].players[socket.id] = player;
+
+      const token = generateId() + generateId();
+      sessions[token] = { roomCode, playerData: player };
+      socket.sessionToken = token;
 
       socket.join(roomCode);
       socket.roomCode = roomCode;
-      socket.emit('room-joined', { roomCode });
+      socket.emit('room-joined', { roomCode, sessionToken: token });
       io.to(roomCode).emit('room-update', rooms[roomCode]);
       console.log(`[create]     ${socket.id} created ${roomCode}`);
     });
@@ -53,7 +62,7 @@ module.exports = function registerHandlers(io) {
       const room = rooms[code];
       if (!room) { socket.emit('error-msg', 'Room not found. Check the code and try again.'); return; }
 
-      room.players[socket.id] = {
+      const player = {
         id: socket.id,
         name: String(name).trim().slice(0, 20) || 'Anonymous',
         avatar: sanitizeAvatar(avatar),
@@ -62,12 +71,43 @@ module.exports = function registerHandlers(io) {
         isSpectator: Boolean(isSpectator),
         role: ['dev','qa','spectator'].includes(role) ? role : 'dev',
       };
+      room.players[socket.id] = player;
+
+      const token = generateId() + generateId();
+      sessions[token] = { roomCode: code, playerData: player };
+      socket.sessionToken = token;
 
       socket.join(code);
       socket.roomCode = code;
-      socket.emit('room-joined', { roomCode: code });
+      socket.emit('room-joined', { roomCode: code, sessionToken: token });
       io.to(code).emit('room-update', room);
       console.log(`[join]       ${socket.id} joined ${code}${isSpectator ? ' (spectator)' : ''}`);
+    });
+
+    socket.on('rejoin-room', ({ sessionToken }) => {
+      const session = sessions[sessionToken];
+      if (!session) { socket.emit('error-msg', 'Session expired. Please rejoin manually.'); return; }
+
+      const { roomCode, playerData } = session;
+      const room = rooms[roomCode];
+      if (!room) { delete sessions[sessionToken]; socket.emit('error-msg', 'Room no longer exists.'); return; }
+
+      // Cancel pending disconnect removal if any
+      if (session.disconnectTimer) { clearTimeout(session.disconnectTimer); session.disconnectTimer = null; }
+
+      // Remove old socket slot, reassign under new socket.id
+      const oldId = playerData.id;
+      delete room.players[oldId];
+      playerData.id = socket.id;
+      room.players[socket.id] = playerData;
+      session.playerData = playerData;
+      socket.sessionToken = sessionToken;
+
+      socket.join(roomCode);
+      socket.roomCode = roomCode;
+      socket.emit('room-joined', { roomCode, sessionToken });
+      io.to(roomCode).emit('room-update', room);
+      console.log(`[rejoin]     ${socket.id} rejoined ${roomCode} (was ${oldId})`);
     });
 
     socket.on('select-card', ({ card }) => {
@@ -226,17 +266,67 @@ module.exports = function registerHandlers(io) {
       io.to(socket.roomCode).emit('reaction', { playerId: socket.id, emoji });
     });
 
+    // ── AI Estimation ──────────────────────────────────────────────────────────
+    socket.on('ai-estimate', async ({ issueKey, jiraSessionId }) => {
+      const room = rooms[socket.roomCode];
+      if (!room) return;
+      const player = room.players[socket.id];
+      if (!player?.isAdmin) return;
+
+      const session = jiraSessions[jiraSessionId];
+      if (!session) { socket.emit('ai-estimate-error', { error: 'Not authenticated with Jira' }); return; }
+
+      const issue = room.issues.find(i => i.jiraKey === issueKey);
+      if (issue?.aiEstimated) { socket.emit('ai-estimate-error', { error: 'AI estimate already run for this ticket' }); return; }
+
+      // Tell everyone loading has started
+      io.to(socket.roomCode).emit('ai-estimate-loading');
+
+      try {
+        const result = await estimateIssue(session, issueKey);
+
+        // Save into room state so it persists
+        if (issue) {
+          issue.devEstimate      = String(result.dev);
+          issue.qaEstimate       = String(result.qa);
+          issue.originalEstimate = String(result.dev + result.qa);
+          issue.aiEstimated      = true;
+        }
+
+        // Broadcast result + updated room to everyone
+        io.to(socket.roomCode).emit('ai-estimate-result', result);
+        io.to(socket.roomCode).emit('room-update', room);
+        console.log(`[ai-estimate] ${issueKey} → dev:${result.dev}h qa:${result.qa}h`);
+      } catch (err) {
+        console.error('[ai-estimate] error:', err.message);
+        io.to(socket.roomCode).emit('ai-estimate-error', { error: err.message });
+      }
+    });
+
     // ── Disconnect ─────────────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       const { roomCode } = socket;
       if (!roomCode || !rooms[roomCode]) return;
       const room = rooms[roomCode];
-      const wasAdmin = room.players[socket.id]?.isAdmin;
-      delete room.players[socket.id];
-      const remaining = Object.values(room.players);
-      if (remaining.length === 0) { delete rooms[roomCode]; return; }
-      if (wasAdmin) remaining[0].isAdmin = true;
-      io.to(roomCode).emit('room-update', room);
+      const token = socket.sessionToken;
+
+      // Give the client 15 seconds to rejoin before removing them
+      const timer = setTimeout(() => {
+        if (!rooms[roomCode]) return;
+        const wasAdmin = room.players[socket.id]?.isAdmin;
+        delete room.players[socket.id];
+        if (token) delete sessions[token];
+        const remaining = Object.values(room.players);
+        if (remaining.length === 0) { delete rooms[roomCode]; return; }
+        if (wasAdmin) remaining[0].isAdmin = true;
+        io.to(roomCode).emit('room-update', room);
+        console.log(`[disconnect] ${socket.id} removed from ${roomCode} (grace expired)`);
+      }, 15000);
+
+      if (token && sessions[token]) {
+        sessions[token].disconnectTimer = timer;
+      }
+      console.log(`[disconnect] ${socket.id} left ${roomCode} — 15s grace started`);
     });
   });
 

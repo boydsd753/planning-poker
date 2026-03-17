@@ -1,9 +1,10 @@
 'use strict';
 
-const express = require('express');
-const router  = express.Router();
+const express    = require('express');
+const router     = express.Router();
 const { jiraSessions } = require('../state');
 const { httpRequest }  = require('../utils');
+const { adfToText }    = require('../ai');
 
 function jiraFetch(session, apiPath) {
   const fullPath = `/ex/jira/${session.cloudId}${apiPath}`;
@@ -108,6 +109,70 @@ jiraRoute('get', '/api/jira/issues', async (req, res, session) => {
 
   res.json({ issues: allIssues, total: allIssues.length });
 });
+
+// Full ticket details for a single issue (used by AI estimator)
+jiraRoute('get', '/api/jira/issue/:key', async (req, res, session) => {
+  const key = req.params.key.toUpperCase();
+  const fields = [
+    'summary','description','status','issuetype','priority','labels',
+    'fixVersions','parent','subtasks','issuelinks','comment','attachment',
+    'customfield_15945','customfield_15944','timetracking','assignee','reporter',
+    'environment','components','versions','customfield_10014', // sprint
+  ].join(',');
+
+  const { status, body } = await jiraFetch(session, `/rest/api/3/issue/${key}?fields=${fields}&expand=renderedFields`);
+  if (status !== 200) return res.status(status).json({ error: `Jira returned ${status}` });
+
+  const i = JSON.parse(body);
+  const f = i.fields;
+
+  const description = f.description ? adfToText(f.description).trim() : '';
+
+  const comments = (f.comment?.comments || []).slice(-10).map(c => ({
+    author: c.author?.displayName || 'Unknown',
+    body:   adfToText(c.body).trim().slice(0, 500),
+    date:   c.created?.slice(0, 10),
+  }));
+
+  const attachments = (f.attachment || []).map(a => ({
+    name:     a.filename,
+    mimeType: a.mimeType,
+    size:     a.size,
+  }));
+
+  const linkedIssues = (f.issuelinks || []).map(l => {
+    const linked = l.inwardIssue || l.outwardIssue;
+    const dir    = l.inwardIssue ? l.type?.inward : l.type?.outward;
+    return linked ? `${dir}: ${linked.key} — ${linked.fields?.summary || ''}` : null;
+  }).filter(Boolean);
+
+  const subtasks = (f.subtasks || []).map(s =>
+    `${s.key}: ${s.fields?.summary || ''} [${s.fields?.status?.name || ''}]`
+  );
+
+  res.json({
+    key,
+    summary:         f.summary || '',
+    description,
+    status:          f.status?.name || '',
+    type:            f.issuetype?.name || '',
+    priority:        f.priority?.name || '',
+    labels:          f.labels || [],
+    fixVersions:     (f.fixVersions || []).map(v => v.name),
+    components:      (f.components || []).map(c => c.name),
+    assignee:        f.assignee?.displayName || '',
+    epic:            f.parent?.fields?.issuetype?.name === 'Epic' ? `${f.parent.key}: ${f.parent.fields?.summary || ''}` : '',
+    devEstimate:     f['customfield_15945'] != null ? String(f['customfield_15945']) : '',
+    qaEstimate:      f['customfield_15944'] != null ? String(f['customfield_15944']) : '',
+    originalEstimate: f.timetracking?.originalEstimateSeconds != null
+      ? String(f.timetracking.originalEstimateSeconds / 3600) : '',
+    comments,
+    attachments,
+    linkedIssues,
+    subtasks,
+  });
+});
+
 
 jiraRoute('post', '/api/jira/update-issue', async (req, res, session) => {
   const { issueKey, devEstimate, qaEstimate, originalEstimate } = req.body || {};

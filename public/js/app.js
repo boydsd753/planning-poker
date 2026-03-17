@@ -201,6 +201,7 @@ let wasRevealed = false;
 let wasAdmin    = false;
 let prevPlayerIds = [];
 let timerInterval = null;
+let rejoining   = false;
 
 // Toggle helper
 // ── Bouncing card physics engine ───────────────────────────────────────────
@@ -324,9 +325,12 @@ function getSettings() {
 const socket = io();
 socket.on('connect', () => { myId = socket.id; });
 
-socket.on('room-joined', ({ roomCode }) => {
+socket.on('room-joined', ({ roomCode, sessionToken }) => {
   myRoom = roomCode;
   roomCodeDisplay.textContent = roomCode;
+  if (sessionToken) {
+    sessionStorage.setItem('pp_session', JSON.stringify({ roomCode, sessionToken }));
+  }
   showScreen('game');
   const url = new URL(window.location.href);
   url.searchParams.set('room', roomCode);
@@ -367,6 +371,108 @@ socket.on('room-update', (room) => {
 });
 
 socket.on('error-msg', (msg) => { landingError.textContent = msg; });
+
+function setAiLoading(loading) {
+  const btn  = $('btn-ai-estimate');
+  const text = btn?.querySelector('.ai-btn-text');
+  if (btn) {
+    btn.classList.toggle('ai-loading', loading);
+    btn.disabled = loading;
+    if (text) text.textContent = loading ? 'Analyzing...' : 'AI Estimator';
+  }
+  // Show/hide a loading shimmer on the panel for non-admins too
+  jiraEstimatePanel?.classList.toggle('ai-panel-loading', loading);
+}
+
+socket.on('ai-estimate-loading', () => setAiLoading(true));
+
+socket.on('ai-estimate-result', ({ dev, qa, reasoning }) => {
+  setAiLoading(false);
+
+  // Update local map so re-render uses the AI values
+  if (jiraEstIssueId && jiraEstMap[jiraEstIssueId]) {
+    jiraEstMap[jiraEstIssueId].dev      = String(dev);
+    jiraEstMap[jiraEstIssueId].qa       = String(qa);
+    jiraEstMap[jiraEstIssueId].original = String(dev + qa);
+  }
+  lastAiReasoning = reasoning || null;
+
+  // Animate fill on current inputs (room-update will re-render with correct values)
+  const devEl  = $('est-dev');
+  const qaEl   = $('est-qa');
+  const origEl = $('est-original');
+  if (devEl)  { devEl.value  = dev;      devEl.classList.add('ai-filled'); }
+  if (qaEl)   { qaEl.value   = qa;       qaEl.classList.add('ai-filled'); }
+  if (origEl) { origEl.value = dev + qa; origEl.classList.add('ai-filled'); }
+  setTimeout(() => {
+    devEl?.classList.remove('ai-filled');
+    qaEl?.classList.remove('ai-filled');
+    origEl?.classList.remove('ai-filled');
+  }, 1200);
+
+  const reasoningEl = $('ai-reasoning');
+  if (reasoningEl && reasoning) {
+    reasoningEl.textContent = reasoning;
+    reasoningEl.classList.remove('hidden');
+  }
+
+  const btn = $('btn-ai-estimate');
+  if (btn) {
+    btn.classList.add('ai-done');
+    setTimeout(() => btn.classList.remove('ai-done'), 2000);
+  }
+});
+
+socket.on('ai-estimate-error', ({ error }) => {
+  setAiLoading(false);
+  showToast(`AI estimate failed: ${escHtml(error)}`, 'leave');
+});
+
+// Auto-rejoin if session stored (page refresh)
+(function tryRejoin() {
+  const raw = sessionStorage.getItem('pp_session');
+  if (!raw) return;
+  try {
+    const { roomCode, sessionToken } = JSON.parse(raw);
+    if (!roomCode || !sessionToken) return;
+
+    rejoining = true;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'rejoin-overlay';
+    overlay.innerHTML = `
+      <div class="rejoin-cards">
+        <div class="rejoin-card">♠</div>
+        <div class="rejoin-card">♥</div>
+        <div class="rejoin-card">♦</div>
+        <div class="rejoin-card">♣</div>
+      </div>
+      <div class="rejoin-text">Reconnecting...</div>`;
+    document.body.appendChild(overlay);
+
+    function dismiss() {
+      overlay.classList.add('fade-out');
+      setTimeout(() => overlay.remove(), 370);
+    }
+
+    let settled = false;
+    socket.once('room-joined', () => { settled = true; dismiss(); });
+    socket.once('error-msg', () => {
+      if (settled) return;
+      settled = true;
+      rejoining = false;
+      sessionStorage.removeItem('pp_session');
+      dismiss();
+    });
+    socket.connect();
+    socket.once('connect', () => {
+      socket.emit('rejoin-room', { sessionToken });
+    });
+  } catch (e) {
+    rejoining = false;
+    sessionStorage.removeItem('pp_session');
+  }
+})();
 
 // URL auto-fill
 const urlRoom = new URLSearchParams(window.location.search).get('room');
@@ -417,6 +523,7 @@ inpRoomCode.addEventListener('keydown', e => { if (e.key === 'Enter') btnJoin.cl
 
 // Game actions
 $('btn-home').addEventListener('click', () => {
+  sessionStorage.removeItem('pp_session');
   socket.disconnect();
   myRoom = null; myId = null; currentRoom = null;
   wasRevealed = false; wasAdmin = false; prevPlayerIds = [];
@@ -435,6 +542,7 @@ btnCopyLink.addEventListener('click', () => {
 });
 
 btnLeave.addEventListener('click', () => {
+  sessionStorage.removeItem('pp_session');
   socket.disconnect();
   currentRoom = null;
   wasRevealed = false;
@@ -1116,6 +1224,7 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
 const jiraEstimatePanel = $('jira-estimate-panel');
 const jiraEstMap = {}; // issueId → { dev, qa, original }
 let jiraEstIssueId = null;
+let lastAiReasoning = null;
 
 function getTopVote(teamPlayers) {
   const voters = teamPlayers.filter(p => !p.isSpectator && p.card !== null);
@@ -1133,13 +1242,21 @@ function renderEstimatePanel(room, isAdmin) {
     return;
   }
 
+  // Clear AI reasoning when switching to a different issue
+  if (jiraEstIssueId !== activeIssue.id) lastAiReasoning = null;
   jiraEstIssueId = activeIssue.id;
+
   if (!jiraEstMap[activeIssue.id]) {
     jiraEstMap[activeIssue.id] = {
       dev:      activeIssue.devEstimate      || '',
       qa:       activeIssue.qaEstimate       || '',
       original: activeIssue.originalEstimate || '',
     };
+  } else {
+    // Always sync from room state so AI-saved values survive re-renders
+    if (activeIssue.devEstimate)      jiraEstMap[activeIssue.id].dev      = activeIssue.devEstimate;
+    if (activeIssue.qaEstimate)       jiraEstMap[activeIssue.id].qa       = activeIssue.qaEstimate;
+    if (activeIssue.originalEstimate) jiraEstMap[activeIssue.id].original = activeIssue.originalEstimate;
   }
   const jiraEst = jiraEstMap[activeIssue.id];
 
@@ -1161,6 +1278,16 @@ function renderEstimatePanel(room, isAdmin) {
       <span class="jira-est-key">${escHtml(activeIssue.jiraKey)}</span>
       <span class="jira-est-title">Estimates</span>
     </div>
+    ${jiraSession ? `
+    <button class="btn-ai-estimate" id="btn-ai-estimate" ${(!isAdmin || activeIssue.aiEstimated) ? 'disabled' : ''}>
+      <span class="ai-btn-icon">${ICON_SPARKLES}</span>
+      <span class="ai-btn-label">
+        <span class="ai-btn-text">${activeIssue.aiEstimated ? 'AI Estimated' : 'AI Estimator'}</span>
+        <span class="ai-btn-badge">Powered by Claude</span>
+      </span>
+    </button>
+    ` : ''}
+    <div class="ai-reasoning${lastAiReasoning ? '' : ' hidden'}" id="ai-reasoning">${lastAiReasoning ? escHtml(lastAiReasoning) : ''}</div>
     <div class="jira-est-fields">
       <div class="jira-est-row">
         <label class="jira-est-label">Original Est. (h)</label>
@@ -1183,6 +1310,13 @@ function renderEstimatePanel(room, isAdmin) {
     const el = $(`est-${key}`);
     if (el) el.addEventListener('input', () => { jiraEst[key] = el.value; });
   });
+
+  const aiBtn = $('btn-ai-estimate');
+  if (aiBtn) {
+    aiBtn.addEventListener('click', () => {
+      socket.emit('ai-estimate', { issueKey: activeIssue.jiraKey, jiraSessionId: jiraSession });
+    });
+  }
 
   const saveBtn = $('btn-save-jira');
   if (saveBtn) {
@@ -1621,6 +1755,14 @@ function renderIssueList(ul, issues) {
 
 // Helpers
 function showScreen(name) {
+  if (rejoining) {
+    // Rejoin overlay is already covering the screen — just swap, no extra sweep
+    rejoining = false;
+    screenLanding.classList.toggle('active', name === 'landing');
+    screenGame.classList.toggle('active',   name === 'game');
+    if (name === 'game') requestAnimationFrame(() => onResize());
+    return;
+  }
   const overlay = document.createElement('div');
   overlay.className = 'screen-transition';
   document.body.appendChild(overlay);

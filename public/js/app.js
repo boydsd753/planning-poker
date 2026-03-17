@@ -637,13 +637,95 @@ btnTimerReset.addEventListener('click', () => socket.emit('timer-reset'));
     btn.addEventListener('click', e => {
       e.stopPropagation();
       socket.emit('react', { emoji: btn.dataset.emoji });
+      // Arm this emoji for throwing
+      selectedThrowEmoji = btn.dataset.emoji;
+      popover.querySelectorAll('.react-emoji-btn').forEach(b => b.classList.remove('throw-armed'));
+      btn.classList.add('throw-armed');
     });
   });
 })();
 
+// ── Throw mechanic ────────────────────────────────────────────────────────────
+let selectedThrowEmoji = null;
+
+const tablesContainer = $('tables-container');
+if (tablesContainer) {
+  tablesContainer.addEventListener('click', e => {
+    if (!selectedThrowEmoji || !myId) return;
+    const mySeat = document.querySelector(`.player-seat[data-player-id="${myId}"], .spectator-seat[data-player-id="${myId}"]`);
+    if (!mySeat) return;
+    const r = mySeat.getBoundingClientRect();
+    const fromX = (r.left + r.width  / 2) / window.innerWidth;
+    const fromY = (r.top  + r.height / 2) / window.innerHeight;
+    const toX   = e.clientX / window.innerWidth;
+    const toY   = e.clientY / window.innerHeight;
+    socket.emit('emoji-throw', { emoji: selectedThrowEmoji, fromX, fromY, toX, toY });
+  });
+}
+
+const CUSTOM_THROW_IMGS = {
+  sergio:       'images/SergioHead.png',
+  danan:        'images/DananHead.png',
+  parrot:       'images/christmas_parrot.gif',
+  party_blob:   'images/party_blob.gif',
+  elmo_money:   'images/elmo-money.gif',
+  this_is_fine: 'images/this_is_fine.gif',
+  spongebob:    'images/spongebob1q.gif',
+  smart:        'images/smart.gif',
+  rage:         'images/rage.jpg',
+  success:      'images/success.png',
+};
+
+function animateThrow(emoji, fromX, fromY, toX, toY) {
+  const startX = fromX * window.innerWidth;
+  const startY = fromY * window.innerHeight;
+  const endX   = toX   * window.innerWidth;
+  const endY   = toY   * window.innerHeight;
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const duration = Math.max(600, dist * 1.1);
+  const arcHeight = Math.min(180, dist * 0.45);
+
+  const el = document.createElement('div');
+  el.className = 'flying-emoji';
+  el.style.cssText = `position:fixed;top:0;left:0;pointer-events:none;z-index:9998;font-size:28px;line-height:1;`;
+
+  if (CUSTOM_THROW_IMGS[emoji]) {
+    const img = document.createElement('img');
+    img.src = CUSTOM_THROW_IMGS[emoji];
+    img.style.cssText = 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
+    el.appendChild(img);
+  } else {
+    el.textContent = emoji;
+  }
+  document.body.appendChild(el);
+
+  let start = null;
+  function frame(ts) {
+    if (!start) start = ts;
+    const t = Math.min((ts - start) / duration, 1);
+    const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    const x = startX + dx * ease;
+    const arc = -arcHeight * Math.sin(Math.PI * t);
+    const y = startY + dy * ease + arc;
+    const spin = dx >= 0 ? t * 180 : -t * 180;
+    const scale = 1 + Math.sin(Math.PI * t) * 0.4;
+    const opacity = t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
+    el.style.transform = `translate(${x}px, ${y}px) rotate(${spin}deg) scale(${scale})`;
+    el.style.opacity = opacity;
+    if (t < 1) requestAnimationFrame(frame);
+    else el.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
+socket.on('emoji-throw', ({ emoji, fromX, fromY, toX, toY }) => {
+  animateThrow(emoji, fromX, fromY, toX, toY);
+});
+
 socket.on('reaction', ({ playerId, emoji }) => {
-  // Find the seat element for this player (in either team area)
-  const seat = document.querySelector(`.player-seat[data-player-id="${playerId}"]`);
+  const seat = document.querySelector(`.player-seat[data-player-id="${playerId}"], .spectator-seat[data-player-id="${playerId}"]`);
   if (!seat) return;
   const el = document.createElement('div');
   el.className = 'floating-reaction';

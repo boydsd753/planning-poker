@@ -39,7 +39,10 @@ router.get('/auth/jira/callback', async (req, res) => {
       client_secret: process.env.ATLASSIAN_CLIENT_SECRET,
       code, redirect_uri: redirectUri,
     });
-    if (tokenRes.status !== 200) return fail('Token exchange failed.');
+    if (tokenRes.status !== 200) {
+      console.error('[jira oauth] token exchange failed:', tokenRes.status, tokenRes.body);
+      return fail('Token exchange failed.');
+    }
     const { access_token, refresh_token, expires_in } = JSON.parse(tokenRes.body);
 
     // Get their Jira cloud ID + domain

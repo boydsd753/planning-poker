@@ -22,7 +22,9 @@ function cardDisplay(val) {
 }
 
 // ── Custom dropdowns & segmented controls ────────────────────────────────
-const ICON_CHECK   = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>`;
+const ICON_CHECK      = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>`;
+const ICON_PAPERCLIP  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13" style="vertical-align:-2px"><path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"/></svg>`;
+const ICON_PERSON     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13" style="vertical-align:-2px"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>`;
 
 function initCustomSelect(cs) {
   const nativeSel = document.getElementById(cs.dataset.for);
@@ -395,25 +397,28 @@ socket.on('ai-estimate-result', ({ dev, qa, reasoning }) => {
     jiraEstMap[jiraEstIssueId].qa       = String(qa);
     jiraEstMap[jiraEstIssueId].original = String(dev + qa);
   }
-  lastAiReasoning = reasoning || null;
+  if (jiraEstIssueId) jiraReasoningMap[jiraEstIssueId] = reasoning || null;
 
   // Animate fill on current inputs (room-update will re-render with correct values)
   const devEl  = $('est-dev');
   const qaEl   = $('est-qa');
   const origEl = $('est-original');
+  // Mark this issue as AI-filled so every re-render keeps the ring
+  if (jiraEstIssueId) aiFilledSet.add(jiraEstIssueId);
+
   if (devEl)  { devEl.value  = dev;      devEl.classList.add('ai-filled'); }
   if (qaEl)   { qaEl.value   = qa;       qaEl.classList.add('ai-filled'); }
   if (origEl) { origEl.value = dev + qa; origEl.classList.add('ai-filled'); }
-  setTimeout(() => {
-    devEl?.classList.remove('ai-filled');
-    qaEl?.classList.remove('ai-filled');
-    origEl?.classList.remove('ai-filled');
-  }, 1200);
 
-  const reasoningEl = $('ai-reasoning');
+  const reasoningWrap = $('ai-reasoning-wrap');
+  const reasoningEl   = $('ai-reasoning');
   if (reasoningEl && reasoning) {
     reasoningEl.textContent = reasoning;
-    reasoningEl.classList.remove('hidden');
+    reasoningWrap?.classList.remove('hidden');
+    reasoningEl.addEventListener('scroll', () => {
+      const atBottom = reasoningEl.scrollHeight - reasoningEl.scrollTop <= reasoningEl.clientHeight + 2;
+      reasoningWrap?.classList.toggle('scrolled-to-bottom', atBottom);
+    }, { passive: true });
   }
 
   const btn = $('btn-ai-estimate');
@@ -840,6 +845,453 @@ function doCountdown(callback) {
 }
 
 // Toast
+// ── Ticket detail modal ───────────────────────────────────────────────────────
+async function openTicketModal(issueKey) {
+  // Remove any existing modal
+  document.getElementById('ticket-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ticket-modal';
+  modal.className = 'ticket-modal-overlay';
+  modal.innerHTML = `
+    <div class="ticket-modal">
+      <div class="ticket-modal-header">
+        <span class="ticket-modal-key">${escHtml(issueKey)}</span>
+        <button class="ticket-modal-close" id="ticket-modal-close">✕</button>
+      </div>
+      <div class="tm-toolbar" id="tm-toolbar">
+        <select class="tm-tb-select" id="tm-tb-style" title="Text style">
+          <option value="p">Normal</option>
+          <option value="h1">Heading 1</option>
+          <option value="h2">Heading 2</option>
+          <option value="h3">Heading 3</option>
+          <option value="h4">Heading 4</option>
+          <option value="h5">Heading 5</option>
+          <option value="h6">Heading 6</option>
+        </select>
+        <span class="tm-tb-sep"></span>
+        <button class="tm-tb-btn" data-cmd="bold"          title="Bold (Ctrl+B)"><b>B</b></button>
+        <button class="tm-tb-btn" data-cmd="italic"        title="Italic (Ctrl+I)"><em>I</em></button>
+        <button class="tm-tb-btn" data-cmd="underline"     title="Underline (Ctrl+U)"><u>U</u></button>
+        <button class="tm-tb-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+        <span class="tm-tb-sep"></span>
+        <label class="tm-tb-btn tm-tb-color-label" title="Text color">
+          <span class="tm-tb-color-a">A</span>
+          <span class="tm-tb-color-swatch" id="tm-tb-color-swatch"></span>
+          <input type="color" id="tm-tb-color" value="#000000">
+        </label>
+        <span class="tm-tb-sep"></span>
+        <button class="tm-tb-btn" data-cmd="insertUnorderedList" title="Bullet list">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><circle cx="2.5" cy="4.5" r="1.5"/><rect x="5.5" y="3.5" width="9" height="2" rx="1"/><circle cx="2.5" cy="11.5" r="1.5"/><rect x="5.5" y="10.5" width="9" height="2" rx="1"/></svg>
+        </button>
+        <button class="tm-tb-btn" data-cmd="insertOrderedList" title="Numbered list">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><text x="0.5" y="7" font-size="6.5" font-family="sans-serif" font-weight="700">1.</text><rect x="5.5" y="3.5" width="9" height="2" rx="1"/><text x="0.5" y="14" font-size="6.5" font-family="sans-serif" font-weight="700">2.</text><rect x="5.5" y="10.5" width="9" height="2" rx="1"/></svg>
+        </button>
+        <span class="tm-tb-sep"></span>
+        <button class="tm-tb-btn" id="tm-tb-link" title="Insert link">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 9.5a3.54 3.54 0 0 0 5 0l1.5-1.5a3.54 3.54 0 0 0-5-5L7 4" stroke-linecap="round"/><path d="M9.5 6.5a3.54 3.54 0 0 0-5 0L3 8a3.54 3.54 0 0 0 5 5L9 12" stroke-linecap="round"/></svg>
+        </button>
+        <button class="tm-tb-btn" data-cmd="formatBlock" data-val="blockquote" title="Blockquote">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M3 2h4v6H5c0 1.1.9 2 2 2v2a4 4 0 0 1-4-4V2zm6 0h4v6h-2c0 1.1.9 2 2 2v2a4 4 0 0 1-4-4V2z"/></svg>
+        </button>
+        <button class="tm-tb-btn" data-cmd="formatBlock" data-val="pre" title="Code block">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M5.7 11.3L2.4 8l3.3-3.3-1-1L.3 8l4.4 4.3 1-1zM10.3 11.3l3.3-3.3-3.3-3.3 1-1L15.7 8l-4.4 4.3-1-1z"/></svg>
+        </button>
+        <button class="tm-tb-btn" data-cmd="removeFormat" title="Clear formatting">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M2 2.5h12v1.5h-4l-1 3.5h2.3L7 13.5 5.5 8H3l1.2-4H2V2.5z"/><line x1="12" y1="10" x2="15" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="10" x2="12" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="ticket-modal-body" id="ticket-modal-body">
+        <div class="ticket-modal-loading">
+          <div class="ticket-modal-spinner"></div>
+          <span>Loading ticket...</span>
+        </div>
+      </div>
+      <div class="tm-save-bar" id="tm-save-bar">
+        <span class="tm-save-hint">Unsaved changes</span>
+        <button class="tm-discard-btn" id="tm-discard-btn">Discard</button>
+        <button class="tm-save-all-btn" id="tm-save-all-btn">Save Changes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', e => { if (e.target === modal) closeTicketModal(); });
+  document.getElementById('ticket-modal-close').addEventListener('click', closeTicketModal);
+  document.addEventListener('keydown', onEscTicket);
+
+  try {
+    const data = await jiraGet(`/api/jira/issue/${issueKey}`);
+    renderTicketModal(data);
+  } catch (err) {
+    document.getElementById('ticket-modal-body').innerHTML =
+      `<div class="ticket-modal-error">Failed to load ticket: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function closeTicketModal() {
+  const m = document.getElementById('ticket-modal');
+  if (m) { m.classList.add('closing'); setTimeout(() => m.remove(), 220); }
+  document.removeEventListener('keydown', onEscTicket);
+}
+
+function onEscTicket(e) { if (e.key === 'Escape') closeTicketModal(); }
+
+function renderTicketModal(d) {
+  const statusColor = {
+    'To Do': '#64748b', 'In Progress': '#3448ff', 'In Review': '#8b5cf6',
+    'Done': '#22c55e', 'Closed': '#22c55e', 'Resolved': '#22c55e',
+  }[d.status] || '#64748b';
+
+  const badge = (text, color) => text
+    ? `<span class="tm-badge" style="background:${color}20;color:${color};border-color:${color}40">${escHtml(text)}</span>`
+    : '';
+
+  const editableSection = (title, content) => content
+    ? `<div class="tm-section">
+        <div class="tm-section-title">${title}</div>
+        <div class="tm-section-body adf-body">${content}</div>
+       </div>`
+    : '';
+
+  const section = (title, content) => content
+    ? `<div class="tm-section"><div class="tm-section-title">${title}</div><div class="tm-section-body">${content}</div></div>`
+    : '';
+
+  const descHtml = d.description || '<em class="tm-muted">No description</em>';
+
+  const commentsHtml = d.comments?.length
+    ? `<div class="tm-comments-body">${d.comments.map(c => `
+        <div class="tm-comment">
+          <div class="tm-comment-meta"><strong>${escHtml(c.author)}</strong> · ${escHtml(c.date || '')}</div>
+          <div class="tm-comment-body adf-body">${c.html || ''}</div>
+        </div>`).join('')}</div>`
+    : '';
+
+  const linkedHtml = d.linkedIssues?.length
+    ? d.linkedIssues.map(l => `<div class="tm-linked-item">${escHtml(l)}</div>`).join('') : '';
+
+  const subtasksHtml = d.subtasks?.length
+    ? d.subtasks.map(s => `<div class="tm-linked-item">${escHtml(s)}</div>`).join('') : '';
+
+  const extraSectionsHtml = (d.extraSections || []).map(s =>
+    editableSection(escHtml(s.label), s.html || '', s.fieldId, s.text)
+  ).join('');
+
+  const attachmentsPlaceholder = (d.attachments || []).length
+    ? `<div class="tm-section"><div class="tm-section-title">Attachments</div><div class="tm-attachments-grid" id="tm-attachments-grid"></div></div>`
+    : '';
+
+  document.getElementById('ticket-modal-body').innerHTML = `
+    <div class="tm-section">
+      <div class="tm-summary">${escHtml(d.summary)}</div>
+    </div>
+    <div class="tm-meta">
+      ${badge(d.status,   statusColor)}
+      ${badge(d.type,     '#64748b')}
+      ${badge(d.priority, d.priority === 'High' || d.priority === 'Highest' ? '#ef4444' : '#64748b')}
+      ${d.assignee ? `<span class="tm-assignee">${ICON_PERSON} ${escHtml(d.assignee)}</span>` : ''}
+      ${d.epic ? badge('Epic: ' + d.epic, '#8b5cf6') : ''}
+    </div>
+    ${d.labels?.length ? `<div class="tm-labels">${d.labels.map(l => `<span class="tm-label">${escHtml(l)}</span>`).join('')}</div>` : ''}
+    ${editableSection('Description', descHtml, 'description', d.descriptionText)}
+    ${extraSectionsHtml}
+    ${section('Subtasks', subtasksHtml)}
+    ${section('Linked Issues', linkedHtml)}
+    ${attachmentsPlaceholder}
+    ${section('Comments', commentsHtml)}
+  `;
+
+  // ── Contenteditable change tracking & save bar ───────────────────────────
+  const modalBody  = document.getElementById('ticket-modal-body');
+  const saveBar    = document.getElementById('tm-save-bar');
+  const saveAllBtn = document.getElementById('tm-save-all-btn');
+  const discardBtn = document.getElementById('tm-discard-btn');
+
+  // Edit/comment functionality disabled — view only
+
+  // ── Rich text toolbar ───────────────────────────────────────────────────
+  const toolbar  = document.getElementById('tm-toolbar');
+  const tbStyle  = document.getElementById('tm-tb-style');
+  const tbColor  = document.getElementById('tm-tb-color');
+  const tbSwatch = document.getElementById('tm-tb-color-swatch');
+  const tbLink   = document.getElementById('tm-tb-link');
+  let hideToolbarTimer = null;
+
+  const showToolbar = () => { clearTimeout(hideToolbarTimer); toolbar.classList.add('active'); };
+  const scheduleHide = () => {
+    hideToolbarTimer = setTimeout(() => {
+      if (!toolbar.contains(document.activeElement) &&
+          !modalBody.querySelector('.tm-editable:focus')) {
+        toolbar.classList.remove('active');
+      }
+    }, 180);
+  };
+
+  modalBody.addEventListener('focusin',  e => { if (e.target.closest('.tm-editable')) showToolbar(); });
+  modalBody.addEventListener('focusout', scheduleHide);
+
+  // Keep focus in editable when clicking toolbar controls (but allow native select + color picker)
+  toolbar.addEventListener('mousedown', e => {
+    if (e.target.closest('select') || e.target.closest('input[type="color"]')) return;
+    e.preventDefault();
+  });
+
+  // Generic command buttons
+  toolbar.addEventListener('click', e => {
+    const btn = e.target.closest('.tm-tb-btn[data-cmd]');
+    if (!btn) return;
+    const cmd = btn.dataset.cmd;
+    const val = btn.dataset.val || null;
+    if (cmd === 'insertUnorderedList') { insertList('ul'); return; }
+    if (cmd === 'insertOrderedList')   { insertList('ol'); return; }
+    // formatBlock needs angle brackets; others pass null or the raw value
+    document.execCommand(cmd, false, val ? `<${val}>` : null);
+    refreshToolbarState();
+    saveBar.classList.add('visible');
+  });
+
+  function insertList(listType) {
+    const sel = window.getSelection();
+    if (!sel?.rangeCount) return;
+    const range = sel.getRangeAt(0);
+
+    // Find the editable ancestor
+    let node = range.commonAncestorContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    const editable = node.closest?.('.tm-editable');
+    if (!editable) return;
+
+    const tag = listType.toUpperCase();
+
+    // Direct children of the editable that the selection touches
+    const selectedBlocks = [...editable.children].filter(c => range.intersectsNode(c));
+    if (!selectedBlocks.length) return;
+
+    // Toggle off if all selected blocks are already this list type
+    if (selectedBlocks.every(b => b.tagName === tag)) {
+      selectedBlocks.forEach(list => {
+        [...list.children].forEach(li => {
+          const p = document.createElement('p');
+          p.innerHTML = li.innerHTML;
+          editable.insertBefore(p, list);
+        });
+        list.remove();
+      });
+    } else {
+      // Wrap selected blocks into a single new list
+      const list = document.createElement(listType);
+      list.className = 'adf-list';
+      editable.insertBefore(list, selectedBlocks[0]);
+      selectedBlocks.forEach(block => {
+        if (block.tagName === 'UL' || block.tagName === 'OL') {
+          // Absorb existing list items into the new list
+          [...block.children].forEach(li => {
+            const newLi = li.cloneNode(true);
+            list.appendChild(newLi);
+          });
+        } else {
+          const li = document.createElement('li');
+          li.innerHTML = block.innerHTML;
+          list.appendChild(li);
+        }
+        block.remove();
+      });
+    }
+
+    editable.focus();
+    saveBar.classList.add('visible');
+    refreshToolbarState();
+  }
+
+  // Block style dropdown
+  tbStyle.addEventListener('change', () => {
+    const tag = tbStyle.value;
+    document.execCommand('formatBlock', false, `<${tag}>`);
+    refreshToolbarState();
+    saveBar.classList.add('visible');
+    modalBody.querySelector('.tm-editable:focus')?.focus();
+  });
+
+  // Text color
+  tbColor.addEventListener('input', () => {
+    document.execCommand('foreColor', false, tbColor.value);
+    tbSwatch.style.background = tbColor.value;
+    saveBar.classList.add('visible');
+  });
+
+  // Link
+  tbLink.addEventListener('click', () => {
+    const sel = window.getSelection();
+    const existing = sel?.anchorNode?.parentElement?.closest('a');
+    if (existing) { document.execCommand('unlink'); return; }
+    const url = prompt('Enter URL (include https://):');
+    if (url) { document.execCommand('createLink', false, url); saveBar.classList.add('visible'); }
+  });
+
+  function refreshToolbarState() {
+    ['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'].forEach(cmd => {
+      toolbar.querySelector(`[data-cmd="${cmd}"]`)?.classList.toggle('active', document.queryCommandState(cmd));
+    });
+    // Block style
+    const block = (document.queryCommandValue('formatBlock') || 'p').toLowerCase().replace(/[<>]/g, '');
+    if (tbStyle.querySelector(`option[value="${block}"]`)) tbStyle.value = block;
+    // Color swatch
+    const rgb = document.queryCommandValue('foreColor');
+    if (rgb) {
+      const hex = rgbToHex(rgb);
+      if (hex) { tbSwatch.style.background = hex; tbColor.value = hex; }
+    }
+  }
+
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement?.closest?.('.tm-editable')) refreshToolbarState();
+  });
+
+  // Load inline images embedded in ADF description
+  document.getElementById('ticket-modal-body').querySelectorAll('img.adf-inline-img').forEach(img => {
+    const id = img.dataset.attachmentId;
+    if (!id) return;
+    fetchAttachmentBlob(id).then(({ url, type }) => {
+      if (!type.startsWith('image/')) { img.style.display = 'none'; return; }
+      img.src = url;
+      img.style.display = 'block';
+      img.addEventListener('click', () => openImageFullscreen(url));
+    }).catch(() => { img.style.display = 'none'; });
+  });
+
+  // Load attachment previews asynchronously
+  if (d.attachments?.length) {
+    const grid = document.getElementById('tm-attachments-grid');
+    d.attachments.forEach(a => renderAttachmentCard(a, grid));
+  }
+}
+
+function openReasoningModal(reasoning) {
+  document.getElementById('reasoning-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'reasoning-modal';
+  overlay.className = 'reasoning-modal-overlay';
+  overlay.innerHTML = `
+    <div class="reasoning-modal">
+      <div class="reasoning-modal-header">
+        <span class="reasoning-modal-title">${ICON_SPARKLES} AI Estimate Reasoning</span>
+        <button class="reasoning-modal-close">✕</button>
+      </div>
+      <div class="reasoning-modal-body">${escHtml(reasoning)}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('.reasoning-modal-close').addEventListener('click', () => overlay.remove());
+  document.addEventListener('keydown', function onEsc(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); }
+  });
+}
+
+async function fetchAttachmentBlob(id) {
+  const res = await fetch(`/api/jira/attachment/${id}`, {
+    headers: { 'x-jira-session': jiraSession || '' },
+  });
+  if (!res.ok) throw new Error(`${res.status}`);
+  const blob = await res.blob();
+  return { blob, url: URL.createObjectURL(blob), type: blob.type };
+}
+
+function openImageFullscreen(src) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;cursor:zoom-out;backdrop-filter:blur(8px)';
+  const img = document.createElement('img');
+  img.src = src;
+  img.style.cssText = 'max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,0.7)';
+  overlay.appendChild(img);
+  overlay.addEventListener('click', () => { overlay.remove(); URL.revokeObjectURL(src); });
+  document.body.appendChild(overlay);
+}
+
+async function renderAttachmentCard(a, container) {
+  const card = document.createElement('div');
+  card.className = 'tm-file-card';
+  card.innerHTML = `<div class="tm-file-loading"><div class="tm-file-spinner"></div></div><div class="tm-file-name">${escHtml(a.name)}</div>`;
+  container.appendChild(card);
+
+  const ext = a.name.split('.').pop().toLowerCase();
+  const mime = (a.mimeType || '').toLowerCase();
+
+  try {
+    const { blob, url, type } = await fetchAttachmentBlob(a.id);
+    const preview = card.querySelector('.tm-file-loading');
+
+    if (type.startsWith('image/') || /^(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/.test(ext)) {
+      const img = document.createElement('img');
+      img.className = 'tm-file-img';
+      img.src = url;
+      img.alt = a.name;
+      img.addEventListener('click', () => openImageFullscreen(url));
+      preview.replaceWith(img);
+
+    } else if (type === 'application/pdf' || ext === 'pdf') {
+      const iframe = document.createElement('iframe');
+      iframe.className = 'tm-file-pdf';
+      iframe.src = url;
+      iframe.title = a.name;
+      preview.replaceWith(iframe);
+
+    } else if (/^(docx)$/.test(ext) || type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      if (typeof mammoth !== 'undefined') {
+        const arrayBuf = await blob.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuf });
+        const div = document.createElement('div');
+        div.className = 'tm-file-docx adf-body';
+        div.innerHTML = result.value;
+        preview.replaceWith(div);
+      } else {
+        preview.replaceWith(makeDownloadBtn(url, a.name, 'Word Document'));
+      }
+
+    } else if (/^(xlsx|xls)$/.test(ext) || /spreadsheet/.test(type)) {
+      if (typeof XLSX !== 'undefined') {
+        const arrayBuf = await blob.arrayBuffer();
+        const wb = XLSX.read(arrayBuf, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const html = XLSX.utils.sheet_to_html(ws, { editable: false });
+        const div = document.createElement('div');
+        div.className = 'tm-file-xlsx';
+        div.innerHTML = html;
+        preview.replaceWith(div);
+      } else {
+        preview.replaceWith(makeDownloadBtn(url, a.name, 'Spreadsheet'));
+      }
+
+    } else if (type.startsWith('video/') || /^(mp4|mov|webm|avi)$/.test(ext)) {
+      const video = document.createElement('video');
+      video.className = 'tm-file-video';
+      video.src = url; video.controls = true;
+      preview.replaceWith(video);
+
+    } else if (type.startsWith('text/') || /^(txt|csv|md|json|xml|html|log)$/.test(ext)) {
+      const text = await blob.text();
+      const pre = document.createElement('pre');
+      pre.className = 'tm-file-text';
+      pre.textContent = text.slice(0, 5000) + (text.length > 5000 ? '\n…' : '');
+      preview.replaceWith(pre);
+
+    } else {
+      // PowerPoint, unknown, etc — download button
+      const label = /^(pptx?|ppt)$/.test(ext) ? 'PowerPoint' : /^(docx?)$/.test(ext) ? 'Word' : ext.toUpperCase() || 'File';
+      preview.replaceWith(makeDownloadBtn(url, a.name, label));
+    }
+  } catch (err) {
+    card.querySelector('.tm-file-loading').innerHTML = `<span class="tm-file-err">Failed to load</span>`;
+  }
+}
+
+function makeDownloadBtn(url, name, label) {
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  a.className = 'tm-file-download';
+  a.innerHTML = `${ICON_PAPERCLIP}<span>${escHtml(label)}</span><span class="tm-file-dl-hint">Click to download</span>`;
+  return a;
+}
+
 function showToast(msg, type = 'info') {
   const t = document.createElement('div');
   t.className = `toast ${type}`;
@@ -1157,8 +1609,17 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
     return;
   }
 
+  const activeIssue = room.issues?.find(i => i.id === room.activeIssueId);
+  const viewBtnHtml = activeIssue?.jiraKey
+    ? `<button class="table-issue-view-btn" data-key="${escHtml(activeIssue.jiraKey)}">View Ticket</button>`
+    : '';
+
+  function attachViewBtn() {
+    const viewBtn = el.querySelector('.table-issue-view-btn');
+    if (viewBtn) viewBtn.addEventListener('click', () => openTicketModal(viewBtn.dataset.key));
+  }
+
   if (!revealed) {
-    const activeIssue = room.issues?.find(i => i.id === room.activeIssueId);
     const voted  = voters.filter(p => p.card !== null).length;
     const status = `${voted} / ${voters.length} voted`;
 
@@ -1168,7 +1629,9 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
           <div class="table-issue-label">Voting on</div>
           <div class="table-issue-title">${escHtml(activeIssue.title)}</div>
           <div class="table-issue-status">${status}</div>
+          ${viewBtnHtml}
         </div>`;
+      attachViewBtn();
     } else {
       el.innerHTML = `<span class="table-waiting">${status}</span>`;
     }
@@ -1181,7 +1644,8 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
     .filter(n => !isNaN(n));
 
   if (numericVotes.length === 0) {
-    el.innerHTML = `<div class="stats-wrap"><span class="stat-range">No numeric votes</span></div>`;
+    el.innerHTML = `<div class="stats-with-btn"><div class="stats-wrap"><span class="stat-range">No numeric votes</span></div>${viewBtnHtml}</div>`;
+    attachViewBtn();
     return;
   }
 
@@ -1190,11 +1654,14 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
 
   if (allSame) {
     el.innerHTML = `
-      <div class="stats-wrap">
-        <span class="stat-consensus">${ICON_SPARKLES} Consensus!</span>
-        <span class="stat-avg">${cardDisplay(allCards[0])}</span>
-        <span class="stat-label">Everyone agreed</span>
+      <div class="stats-with-btn">
+        <div class="stats-wrap">
+          <span class="stat-consensus">${ICON_SPARKLES} Consensus!</span>
+          <span class="stat-avg">${cardDisplay(allCards[0])}</span>
+          <span class="stat-label">Everyone agreed</span>
+        </div>${viewBtnHtml}
       </div>`;
+    attachViewBtn();
     return;
   }
 
@@ -1207,10 +1674,13 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
     : '';
 
   el.innerHTML = `
-    <div class="stats-wrap">
-      ${avgHtml}
-      <span class="stat-range">Range: ${min} – ${max}</span>
+    <div class="stats-with-btn">
+      <div class="stats-wrap">
+        ${avgHtml}
+        <span class="stat-range">Range: ${min} – ${max}</span>
+      </div>${viewBtnHtml}
     </div>`;
+  attachViewBtn();
 }
 
 function renderResults(players, settings, room) {
@@ -1304,9 +1774,10 @@ function buildTeamResults(teamPlayers, settings, room, team, label) {
 
 // ── Jira Estimate Panel ────────────────────────────────────────────────────
 const jiraEstimatePanel = $('jira-estimate-panel');
-const jiraEstMap = {}; // issueId → { dev, qa, original }
+const jiraEstMap      = {}; // issueId → { dev, qa, original }
+const jiraReasoningMap = {}; // issueId → reasoning string
+const aiFilledSet      = new Set(); // issueIds whose estimates were AI-generated (ring shown)
 let jiraEstIssueId = null;
-let lastAiReasoning = null;
 
 function getTopVote(teamPlayers) {
   const voters = teamPlayers.filter(p => !p.isSpectator && p.card !== null);
@@ -1325,7 +1796,6 @@ function renderEstimatePanel(room, isAdmin) {
   }
 
   // Clear AI reasoning when switching to a different issue
-  if (jiraEstIssueId !== activeIssue.id) lastAiReasoning = null;
   jiraEstIssueId = activeIssue.id;
 
   if (!jiraEstMap[activeIssue.id]) {
@@ -1369,7 +1839,10 @@ function renderEstimatePanel(room, isAdmin) {
       </span>
     </button>
     ` : ''}
-    <div class="ai-reasoning${lastAiReasoning ? '' : ' hidden'}" id="ai-reasoning">${lastAiReasoning ? escHtml(lastAiReasoning) : ''}</div>
+    <div class="ai-reasoning-wrap${jiraReasoningMap[activeIssue.id] ? '' : ' hidden'}" id="ai-reasoning-wrap">
+      <div class="ai-reasoning" id="ai-reasoning">${jiraReasoningMap[activeIssue.id] ? escHtml(jiraReasoningMap[activeIssue.id]) : ''}</div>
+      <div class="ai-reasoning-fade" id="ai-reasoning-fade"></div>
+    </div>
     <div class="jira-est-fields">
       <div class="jira-est-row">
         <label class="jira-est-label">Original Est. (h)</label>
@@ -1387,10 +1860,30 @@ function renderEstimatePanel(room, isAdmin) {
     ${isAdmin ? `<button class="btn-save-jira" id="btn-save-jira">Save to Jira</button>` : ''}
   `;
 
-  // Keep local state in sync as user edits
+  // Apply AI-filled ring if this issue was AI-estimated
+  if (aiFilledSet.has(activeIssue.id)) {
+    [$('est-dev'), $('est-qa'), $('est-original')].forEach(el => {
+      if (el) el.classList.add('ai-filled');
+    });
+  }
+
+  // Wire reasoning expand — must be done after innerHTML re-render
+  const reasoningWrap = $('ai-reasoning-wrap');
+  if (reasoningWrap && jiraReasoningMap[activeIssue.id]) {
+    reasoningWrap.addEventListener('click', () => openReasoningModal(jiraReasoningMap[activeIssue.id]));
+  }
+
+  // Keep local state in sync as user edits; clear ring on manual edit
   ['dev','qa','original'].forEach(key => {
     const el = $(`est-${key}`);
-    if (el) el.addEventListener('input', () => { jiraEst[key] = el.value; });
+    if (!el) return;
+    el.addEventListener('input', () => {
+      jiraEst[key] = el.value;
+      el.classList.remove('ai-filled');
+      if (![$('est-dev'), $('est-qa'), $('est-original')].some(e => e?.classList.contains('ai-filled'))) {
+        aiFilledSet.delete(activeIssue.id);
+      }
+    });
   });
 
   const aiBtn = $('btn-ai-estimate');
@@ -1454,14 +1947,27 @@ function renderIssues(issues, activeId) {
       ? `<span class="issue-saved-badge" title="Saved to Jira"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg></span>`
       : '';
 
+    const viewTicketBtn = issue.jiraKey
+      ? `<button class="issue-view-btn">View Ticket</button>`
+      : '';
+
     li.innerHTML = `
       ${savedBadge}
-      <span class="issue-title">${escHtml(issue.title)}</span>
+      <div class="issue-title-block">
+        <span class="issue-title">${escHtml(issue.title)}</span>
+        ${viewTicketBtn}
+      </div>
       ${estHtml}
       <button class="issue-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>`;
     li.querySelector('.issue-title').addEventListener('click', () => {
       socket.emit('set-active-issue', { id: issue.id });
     });
+    if (issue.jiraKey) {
+      li.querySelector('.issue-view-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        openTicketModal(issue.jiraKey);
+      });
+    }
     li.querySelector('.issue-delete').addEventListener('click', e => {
       e.stopPropagation();
       socket.emit('delete-issue', { id: issue.id });
@@ -1474,9 +1980,16 @@ function renderIssues(issues, activeId) {
 let jiraSession = localStorage.getItem('jiraSession') || null;
 let jiraDomain  = localStorage.getItem('jiraDomain')  || null;
 
+function clearJiraSession() {
+  jiraSession = null; jiraDomain = null;
+  localStorage.removeItem('jiraSession');
+  localStorage.removeItem('jiraDomain');
+}
+
 function jiraHeaders() {
   return { 'Content-Type': 'application/json', 'x-jira-session': jiraSession || '' };
 }
+
 
 function updateJiraButton(isAdmin) {
   const label = jiraSession ? `Jira: ${jiraDomain}` : 'Link Jira';
@@ -1493,9 +2006,7 @@ function updateJiraButton(isAdmin) {
 btnLinkJira.addEventListener('click', () => {
   if (jiraSession) {
     // Already linked — click to unlink
-    jiraSession = null; jiraDomain = null;
-    localStorage.removeItem('jiraSession');
-    localStorage.removeItem('jiraDomain');
+    clearJiraSession();
     updateJiraButton(true);
     showToast('Jira unlinked', 'info');
     return;
@@ -1544,9 +2055,188 @@ let allFetchedIssues = [];
 // Active client-side filter state
 let activeFilters = { search: '', types: new Set(), versions: new Set(), labels: new Set(), priorities: new Set() };
 
+function rgbToHex(rgb) {
+  const m = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!m) return rgb.startsWith('#') ? rgb : null;
+  return '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('');
+}
+
+function normalizeColor(color) {
+  if (!color) return null;
+  color = color.trim();
+  if (color.startsWith('#')) return color.toLowerCase();
+  return rgbToHex(color);
+}
+
+// ── HTML → ADF converter (mirrors our adfToHtml output back to ADF) ──────────
+function htmlToAdf(el) {
+  return { version: 1, type: 'doc', content: blockChildren(el) };
+}
+
+function blockChildren(el) {
+  const out = [];
+  for (const node of el.childNodes) {
+    const b = toBlock(node);
+    if (b) Array.isArray(b) ? out.push(...b) : out.push(b);
+  }
+  return out.length ? out : [{ type: 'paragraph', content: [] }];
+}
+
+function toBlock(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const t = node.textContent;
+    if (!t.trim()) return null;
+    return { type: 'paragraph', content: [{ type: 'text', text: t }] };
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return null;
+  const tag = node.tagName.toLowerCase();
+  const cls  = node.className || '';
+
+  // Restore original ADF node (media, file-ref, placeholder) from data-adf attribute
+  if (node.dataset?.adf) {
+    try {
+      const adfNode = JSON.parse(node.dataset.adf);
+      // Wrap media nodes in mediaSingle so Jira renders them correctly
+      if (adfNode.type === 'media') return { type: 'mediaSingle', attrs: { layout: 'center' }, content: [adfNode] };
+      return adfNode;
+    } catch {}
+  }
+  // adf-media-group div: reconstruct mediaGroup wrapping its media children
+  if (cls.includes('adf-media-group')) {
+    const mediaNodes = [...node.querySelectorAll('[data-adf]')].map(el => {
+      try { return JSON.parse(el.dataset.adf); } catch { return null; }
+    }).filter(Boolean);
+    if (mediaNodes.length) return { type: 'mediaGroup', content: mediaNodes };
+  }
+
+  // Headings
+  const hm = tag.match(/^h([1-6])$/) || cls.match(/adf-h([1-6])/);
+  if (hm) return { type: 'heading', attrs: { level: +hm[1] }, content: inlineChildren(node) };
+
+  if (tag === 'p')          return { type: 'paragraph',  content: inlineChildren(node) };
+  if (tag === 'pre')        return { type: 'codeBlock',  content: [{ type: 'text', text: node.innerText }] };
+  if (tag === 'hr')         return { type: 'rule' };
+  if (tag === 'blockquote') return { type: 'blockquote', content: [{ type: 'paragraph', content: inlineChildren(node) }] };
+
+  if (tag === 'ul') return {
+    type: 'bulletList',
+    content: [...node.children].filter(c => c.tagName.toLowerCase() === 'li').map(li => ({
+      type: 'listItem', content: liContent(li),
+    })),
+  };
+  if (tag === 'ol') return {
+    type: 'orderedList',
+    content: [...node.children].filter(c => c.tagName.toLowerCase() === 'li').map(li => ({
+      type: 'listItem', content: liContent(li),
+    })),
+  };
+
+  if (tag === 'table') {
+    const rows = [...node.querySelectorAll('tr')].map(tr => ({
+      type: 'tableRow',
+      content: [...tr.children].map(cell => ({
+        type: cell.tagName.toLowerCase() === 'th' ? 'tableHeader' : 'tableCell',
+        content: [{ type: 'paragraph', content: inlineChildren(cell) }],
+      })),
+    }));
+    return { type: 'table', content: rows };
+  }
+
+  // Divs and other wrappers — recurse as block container
+  if (['div','section','article'].includes(tag)) return blockChildren(node);
+
+  // Anything else — try as inline paragraph
+  const inline = inlineChildren(node);
+  return inline.length ? { type: 'paragraph', content: inline } : null;
+}
+
+function liContent(li) {
+  // If li contains block elements, convert them; otherwise wrap inline in paragraph
+  const hasBlock = [...li.childNodes].some(n =>
+    n.nodeType === Node.ELEMENT_NODE &&
+    ['p','ul','ol','blockquote','pre','h1','h2','h3','h4','h5','h6'].includes(n.tagName.toLowerCase())
+  );
+  if (hasBlock) return blockChildren(li);
+  return [{ type: 'paragraph', content: inlineChildren(li) }];
+}
+
+function inlineChildren(el) {
+  const out = [];
+  for (const node of el.childNodes) out.push(...toInline(node, []));
+  return out;
+}
+
+function toInline(node, marks) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent;
+    if (!text) return [];
+    const n = { type: 'text', text };
+    if (marks.length) n.marks = marks;
+    return [n];
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return [];
+  const tag = node.tagName.toLowerCase();
+
+  if (tag === 'br')  return [{ type: 'hardBreak' }];
+  if (tag === 'hr')  return [{ type: 'rule' }];
+  // Restore original ADF media/file nodes from data-adf attribute
+  if (node.dataset?.adf) {
+    try { return [JSON.parse(node.dataset.adf)]; } catch {}
+  }
+  if (tag === 'img') return [];
+
+  let m = [...marks];
+  if (tag === 'strong' || tag === 'b')  m = addMark(m, { type: 'strong' });
+  else if (tag === 'em' || tag === 'i') m = addMark(m, { type: 'em' });
+  else if (tag === 's' || tag === 'strike') m = addMark(m, { type: 'strike' });
+  else if (tag === 'u')                 m = addMark(m, { type: 'underline' });
+  else if (tag === 'code')              m = addMark(m, { type: 'code' });
+  else if (tag === 'a') {
+    const href = node.getAttribute('href') || '';
+    m = addMark(m, { type: 'link', attrs: { href, title: href } });
+  } else if (tag === 'font') {
+    const hex = normalizeColor(node.getAttribute('color'));
+    if (hex) m = addMark(m, { type: 'textColor', attrs: { color: hex } });
+  } else if (tag === 'span') {
+    const style = node.getAttribute('style') || '';
+    const cm = style.match(/color:\s*([^;]+)/i);
+    if (cm) { const hex = normalizeColor(cm[1]); if (hex) m = addMark(m, { type: 'textColor', attrs: { color: hex } }); }
+  }
+
+  const out = [];
+  for (const child of node.childNodes) out.push(...toInline(child, m));
+  return out;
+}
+
+function addMark(marks, mark) {
+  if (marks.some(m => m.type === mark.type)) return marks;
+  return [...marks, mark];
+}
+
 async function jiraGet(url) {
   const res = await fetch(url, { headers: { 'x-jira-session': jiraSession || '' }, cache: 'no-store' });
   const data = await res.json();
+  if (res.status === 401) {
+    clearJiraSession();
+    updateJiraButton(true);
+    throw new Error('Jira session expired — please re-link Jira.');
+  }
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  return data;
+}
+
+async function jiraPost(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-jira-session': jiraSession || '' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.status === 401) {
+    clearJiraSession();
+    updateJiraButton(true);
+    throw new Error('Jira session expired — please re-link Jira.');
+  }
   if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
   return data;
 }

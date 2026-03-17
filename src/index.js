@@ -8,7 +8,10 @@ const path    = require('path');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server);
+const io     = new Server(server, {
+  pingInterval: 25000,  // how often to ping (ms)
+  pingTimeout:  60000,  // how long to wait for pong before disconnecting (ms)
+});
 
 const securityHeaders  = require('./middleware/security');
 const authRouter       = require('./routes/auth');
@@ -19,6 +22,12 @@ const registerHandlers = require('./socket/handlers');
 app.use(securityHeaders);
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(express.json());
+
+// ── Vendor libs (served locally to avoid CDN tracking prevention) ─────────────
+app.get('/js/vendor/mammoth.min.js', (req, res) =>
+  res.sendFile(path.join(__dirname, '..', 'node_modules', 'mammoth', 'mammoth.browser.min.js')));
+app.get('/js/vendor/xlsx.full.min.js', (req, res) =>
+  res.sendFile(path.join(__dirname, '..', 'node_modules', 'xlsx', 'dist', 'xlsx.full.min.js')));
 
 // ── Utility routes ────────────────────────────────────────────────────────────
 app.get('/health',  (req, res) => res.sendStatus(200));

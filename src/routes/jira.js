@@ -4,12 +4,10 @@ const express    = require('express');
 const router     = express.Router();
 const { jiraSessions } = require('../state');
 const { httpRequest }  = require('../utils');
-const { adfToText }    = require('../ai');
+const { adfToText, adfToHtml } = require('../ai');
 
 function jiraFetch(session, apiPath) {
   const fullPath = `/ex/jira/${session.cloudId}${apiPath}`;
-  console.log(`[jira fetch] GET https://api.atlassian.com${fullPath}`);
-  console.log(`[jira fetch] token: Bearer ${session.accessToken.slice(0, 40)}...`);
   return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'GET', fullPath, null);
 }
 
@@ -110,34 +108,68 @@ jiraRoute('get', '/api/jira/issues', async (req, res, session) => {
   res.json({ issues: allIssues, total: allIssues.length });
 });
 
-// Full ticket details for a single issue (used by AI estimator)
+// Full ticket details for a single issue
 jiraRoute('get', '/api/jira/issue/:key', async (req, res, session) => {
   const key = req.params.key.toUpperCase();
-  const fields = [
-    'summary','description','status','issuetype','priority','labels',
-    'fixVersions','parent','subtasks','issuelinks','comment','attachment',
-    'customfield_15945','customfield_15944','timetracking','assignee','reporter',
-    'environment','components','versions','customfield_10014', // sprint
-  ].join(',');
 
-  const { status, body } = await jiraFetch(session, `/rest/api/3/issue/${key}?fields=${fields}&expand=renderedFields`);
+  const { status, body } = await jiraFetch(session, `/rest/api/3/issue/${key}?fields=*all&expand=names`);
   if (status !== 200) return res.status(status).json({ error: `Jira returned ${status}` });
 
-  const i = JSON.parse(body);
-  const f = i.fields;
+  const parsed = JSON.parse(body);
+  const f      = parsed.fields;
+  const names  = parsed.names || {}; // fieldId → display name
 
-  const description = f.description ? adfToText(f.description).trim() : '';
+  // Skip fields that are objects/structures we handle explicitly or that are noise
+  const SKIP_FIELDS = new Set([
+    'summary','description','status','issuetype','priority','labels','fixVersions',
+    'parent','subtasks','issuelinks','comment','attachment','assignee','reporter',
+    'creator','created','updated','lastViewed','watches','votes','worklog','components',
+    'environment','timetracking','timespent','timeestimate','timeoriginalestimate',
+    'aggregatetimespent','aggregatetimeestimate','aggregatetimeoriginalestimate',
+    'aggregateprogress','progress','versions','project','customfield_15945','customfield_15944',
+  ]);
+
+  // Build a lookup map: numeric ID and filename → attachment object
+  // ADF media nodes use UUIDs (not numeric IDs), so we match by __fileName attr
+  const attachmentMap = {};
+  for (const a of (f.attachment || [])) {
+    if (a.id)       attachmentMap[`id:${a.id}`]         = a;
+    if (a.filename) attachmentMap[`fn:${a.filename}`]   = a;
+  }
+
+  // Collect extra ADF / text custom fields by display name
+  const extraSections = [];
+  for (const [fieldId, val] of Object.entries(f)) {
+    if (SKIP_FIELDS.has(fieldId)) continue;
+    if (val === null || val === undefined) continue;
+    const label = names[fieldId];
+    if (!label) continue;
+
+    if (typeof val === 'object' && val.type === 'doc') {
+      const text = adfToText(val).trim();
+      if (text) extraSections.push({ label, fieldId, html: adfToHtml(val, attachmentMap), text });
+    } else if (typeof val === 'string' && val.trim()) {
+      extraSections.push({ label, fieldId, html: `<p>${val.trim().replace(/\n/g, '<br>')}</p>`, text: val.trim() });
+    } else if (typeof val === 'number') {
+      extraSections.push({ label, fieldId, html: `<p>${val}</p>`, text: String(val) });
+    }
+  }
+
+  const description     = f.description ? adfToHtml(f.description, attachmentMap) : '';
+  const descriptionText = f.description ? adfToText(f.description).trim() : '';
 
   const comments = (f.comment?.comments || []).slice(-10).map(c => ({
     author: c.author?.displayName || 'Unknown',
-    body:   adfToText(c.body).trim().slice(0, 500),
+    html:   adfToHtml(c.body, attachmentMap),
     date:   c.created?.slice(0, 10),
   }));
 
   const attachments = (f.attachment || []).map(a => ({
     name:     a.filename,
-    mimeType: a.mimeType,
+    mimeType: a.mimeType || '',
     size:     a.size,
+    id:       a.id,
+    isImage:  /^image\//i.test(a.mimeType || ''),
   }));
 
   const linkedIssues = (f.issuelinks || []).map(l => {
@@ -154,6 +186,8 @@ jiraRoute('get', '/api/jira/issue/:key', async (req, res, session) => {
     key,
     summary:         f.summary || '',
     description,
+    descriptionText,
+    extraSections,
     status:          f.status?.name || '',
     type:            f.issuetype?.name || '',
     priority:        f.priority?.name || '',
@@ -173,6 +207,27 @@ jiraRoute('get', '/api/jira/issue/:key', async (req, res, session) => {
   });
 });
 
+// Proxy Jira attachment images — accepts numeric IDs and UUIDs (ADF media nodes use UUIDs)
+router.get('/api/jira/attachment/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!/^[\da-f-]+$/i.test(id)) return res.status(400).end();
+  const sessionId = req.headers['x-jira-session'] || req.query.s;
+  const session   = jiraSessions[sessionId];
+  if (!session) return res.status(401).end();
+  try {
+    await refreshIfNeeded(session);
+    const fullPath = `/ex/jira/${session.cloudId}/rest/api/3/attachment/content/${id}`;
+    const { status, body, headers } = await httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'GET', fullPath, null, true);
+    if (status !== 200) return res.status(status).end();
+    const ct = headers?.['content-type'] || 'application/octet-stream';
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.end(body);
+  } catch (err) {
+    res.status(500).end();
+  }
+});
+
 
 jiraRoute('post', '/api/jira/update-issue', async (req, res, session) => {
   const { issueKey, devEstimate, qaEstimate, originalEstimate } = req.body || {};
@@ -188,6 +243,51 @@ jiraRoute('post', '/api/jira/update-issue', async (req, res, session) => {
   const { status, body } = await jiraPut(session, `/rest/api/3/issue/${issueKey}`, { fields });
   if (status !== 204) return res.status(status).json({ error: `Jira returned ${status}`, detail: body });
   res.json({ ok: true });
+});
+
+// Update a single field (summary, description, or any ADF/text custom field)
+jiraRoute('post', '/api/jira/update-field', async (req, res, session) => {
+  const { issueKey, fieldId, text, adf } = req.body || {};
+  if (!issueKey || !fieldId || (text === undefined && adf === undefined))
+    return res.status(400).json({ error: 'issueKey, fieldId, and text or adf required' });
+
+  let value;
+  if (fieldId === 'summary') {
+    value = String(text ?? '').slice(0, 255);
+  } else if (adf && typeof adf === 'object') {
+    value = adf; // client sent fully-formed ADF — use as-is
+  } else {
+    // Fallback: convert plain text to ADF paragraphs
+    const paragraphs = String(text).split('\n').map(line => ({
+      type: 'paragraph',
+      content: line.trim() ? [{ type: 'text', text: line }] : [],
+    }));
+    value = { version: 1, type: 'doc', content: paragraphs };
+  }
+
+  const { status, body } = await jiraPut(session, `/rest/api/3/issue/${issueKey}`, { fields: { [fieldId]: value } });
+  if (status !== 204) return res.status(status).json({ error: `Jira returned ${status}`, detail: body });
+  res.json({ ok: true });
+});
+
+// Add a comment to an issue
+jiraRoute('post', '/api/jira/comment', async (req, res, session) => {
+  const { issueKey, text } = req.body || {};
+  if (!issueKey || !text?.trim()) return res.status(400).json({ error: 'issueKey and text required' });
+
+  const body = {
+    body: {
+      version: 1, type: 'doc',
+      content: String(text).split('\n').map(line => ({
+        type: 'paragraph',
+        content: line.trim() ? [{ type: 'text', text: line }] : [],
+      })),
+    },
+  };
+  const { status, body: resBody } = await jiraPost(session, `/rest/api/3/issue/${issueKey}/comment`, body);
+  if (status !== 201) return res.status(status).json({ error: `Jira returned ${status}`, detail: resBody });
+  const c = JSON.parse(resBody);
+  res.json({ author: c.author?.displayName || 'You', date: c.created?.slice(0, 10), text: text.trim() });
 });
 
 module.exports = router;

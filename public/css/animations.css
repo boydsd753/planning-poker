@@ -150,3 +150,5 @@
   0%, 100% { box-shadow: 0 4px 16px rgba(52,72,255,0.25); }
   50%       { box-shadow: 0 4px 28px rgba(52,72,255,0.55); }
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }

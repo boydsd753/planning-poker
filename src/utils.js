@@ -41,17 +41,37 @@ function sanitizeSettings(raw = {}) {
   };
 }
 
-function httpRequest(hostname, authHeader, method, path, body) {
-  console.log(`[http] ${method} https://${hostname}${path}`);
+function httpRequest(hostname, authHeader, method, path, body, rawResponse = false, _redirects = 5) {
   return new Promise((resolve, reject) => {
     const bodyStr = body ? JSON.stringify(body) : null;
-    const headers = { Accept: 'application/json' };
+    const headers = { Accept: rawResponse ? '*/*' : 'application/json' };
     if (authHeader) headers['Authorization'] = authHeader;
     if (bodyStr) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(bodyStr); }
     const req = https.request({ hostname, path, method, headers }, res => {
-      let data = '';
-      res.on('data', c => { data += c; });
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+      // Follow redirects (Jira attachment content redirects to CDN)
+      if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location && _redirects > 0) {
+        res.resume(); // drain to free memory
+        try {
+          const url = new URL(res.headers.location);
+          // Don't forward Atlassian auth token to external CDN hosts
+          const nextAuth = url.hostname === hostname ? authHeader : null;
+          resolve(httpRequest(url.hostname, nextAuth, 'GET', url.pathname + url.search, null, rawResponse, _redirects - 1));
+        } catch {
+          // Relative redirect
+          resolve(httpRequest(hostname, authHeader, 'GET', res.headers.location, null, rawResponse, _redirects - 1));
+        }
+        return;
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        resolve({
+          status:  res.statusCode,
+          headers: res.headers,
+          body:    rawResponse ? buf : buf.toString('utf8'),
+        });
+      });
     });
     req.on('error', reject);
     if (bodyStr) req.write(bodyStr);

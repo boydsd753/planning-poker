@@ -21,6 +21,80 @@ function adfToText(node) {
   return children;
 }
 
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function adfToHtml(node, attachmentMap) {
+  if (!node) return '';
+  if (node.type === 'text') {
+    let text = esc(node.text || '');
+    for (const mark of (node.marks || [])) {
+      if (mark.type === 'strong')    text = `<strong>${text}</strong>`;
+      else if (mark.type === 'em')   text = `<em>${text}</em>`;
+      else if (mark.type === 'code') text = `<code>${text}</code>`;
+      else if (mark.type === 'strike')    text = `<s>${text}</s>`;
+      else if (mark.type === 'underline') text = `<u>${text}</u>`;
+      else if (mark.type === 'link') {
+        const href = esc(mark.attrs?.href || '#');
+        text = `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      }
+    }
+    return text;
+  }
+  if (node.type === 'mention')   return `<span class="adf-mention">${esc(node.attrs?.text || '')}</span>`;
+  if (node.type === 'emoji')     return esc(node.attrs?.text || '');
+  if (node.type === 'hardBreak') return '<br>';
+  if (node.type === 'rule')      return '<hr class="adf-hr">';
+  if (node.type === 'inlineCard') {
+    const url = esc(node.attrs?.url || '');
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="adf-card-link">${url}</a>`;
+  }
+
+  const children = (node.content || []).map(c => adfToHtml(c, attachmentMap)).join('');
+
+  switch (node.type) {
+    case 'doc':         return children;
+    case 'paragraph':   return `<p>${children || '<br>'}</p>`;
+    case 'heading': {
+      const lvl = Math.min(Math.max(node.attrs?.level || 1, 1), 6);
+      return `<h${lvl} class="adf-h${lvl}">${children}</h${lvl}>`;
+    }
+    case 'bulletList':  return `<ul class="adf-list">${children}</ul>`;
+    case 'orderedList': return `<ol class="adf-list">${children}</ol>`;
+    case 'listItem':    return `<li>${children}</li>`;
+    case 'codeBlock':   return `<pre class="adf-pre"><code>${children}</code></pre>`;
+    case 'blockquote':  return `<blockquote class="adf-blockquote">${children}</blockquote>`;
+    case 'table':       return `<table class="adf-table">${children}</table>`;
+    case 'tableRow':    return `<tr>${children}</tr>`;
+    case 'tableHeader': return `<th>${children}</th>`;
+    case 'tableCell':   return `<td>${children}</td>`;
+    case 'mediaSingle':
+    case 'mediaGroup':  return `<div class="adf-media-group">${children}</div>`;
+    case 'media': {
+      const fileName = node.attrs?.__fileName || node.attrs?.alt || '';
+      const fileMime = node.attrs?.__fileMimeType || '';
+      const att = (fileName && attachmentMap?.[`fn:${fileName}`]) || null;
+      // Store the original ADF node attrs so the client can reconstruct the node on save
+      const adfAttr = esc(JSON.stringify({ type: 'media', attrs: node.attrs || {} }));
+      if (!att) {
+        // No attachment match — still emit a placeholder that preserves the original ADF
+        return `<span class="adf-media-placeholder" data-adf="${adfAttr}">[media]</span>`;
+      }
+      const mime = att.mimeType || fileMime;
+      const name = att.filename || fileName;
+      const isImage = /^image\//i.test(mime) || /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(name);
+      if (isImage) {
+        return `<img class="adf-inline-img" data-attachment-id="${esc(att.id)}" data-adf="${adfAttr}" alt="${esc(name)}" src="">`;
+      }
+      return `<span class="adf-file-ref" data-attachment-id="${esc(att.id)}" data-adf="${adfAttr}">${esc(name)}</span>`;
+    }
+    default:            return children;
+  }
+}
+
 function jiraFetch(session, apiPath) {
   const fullPath = `/ex/jira/${session.cloudId}${apiPath}`;
   return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'GET', fullPath, null);
@@ -116,4 +190,4 @@ Respond in this exact JSON format only, no other text:
   };
 }
 
-module.exports = { estimateIssue, adfToText };
+module.exports = { estimateIssue, adfToText, adfToHtml };

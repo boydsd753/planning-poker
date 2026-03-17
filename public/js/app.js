@@ -657,13 +657,16 @@ const tablesContainer = $('tables-container');
 if (tablesContainer) {
   tablesContainer.addEventListener('click', e => {
     if (!selectedThrowEmoji || !myId) return;
+    if (e.target.closest('#dealer-toggle')) return;
     const mySeat = document.querySelector(`.player-seat[data-player-id="${myId}"], .spectator-seat[data-player-id="${myId}"]`);
     if (!mySeat) return;
-    const r = mySeat.getBoundingClientRect();
-    const fromX = (r.left + r.width  / 2) / window.innerWidth;
-    const fromY = (r.top  + r.height / 2) / window.innerHeight;
-    const toX   = e.clientX / window.innerWidth;
-    const toY   = e.clientY / window.innerHeight;
+    const cr = tablesContainer.getBoundingClientRect();
+    const r  = mySeat.getBoundingClientRect();
+    // Normalize relative to the tables-container so coordinates are screen-size independent
+    const fromX = (r.left + r.width  / 2 - cr.left) / cr.width;
+    const fromY = (r.top  + r.height / 2 - cr.top)  / cr.height;
+    const toX   = (e.clientX - cr.left) / cr.width;
+    const toY   = (e.clientY - cr.top)  / cr.height;
     socket.emit('emoji-throw', { emoji: selectedThrowEmoji, fromX, fromY, toX, toY });
   });
 }
@@ -682,10 +685,14 @@ const CUSTOM_THROW_IMGS = {
 };
 
 function animateThrow(emoji, fromX, fromY, toX, toY) {
-  const startX = fromX * window.innerWidth;
-  const startY = fromY * window.innerHeight;
-  const endX   = toX   * window.innerWidth;
-  const endY   = toY   * window.innerHeight;
+  // Denormalize relative to tables-container so the throw lands in the same
+  // proportional spot on every screen size
+  const tc = $('tables-container');
+  const cr = tc ? tc.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  const startX = cr.left + fromX * cr.width;
+  const startY = cr.top  + fromY * cr.height;
+  const endX   = cr.left + toX   * cr.width;
+  const endY   = cr.top  + toY   * cr.height;
   const dx = endX - startX;
   const dy = endY - startY;
   const dist = Math.sqrt(dx * dx + dy * dy);

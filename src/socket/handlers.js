@@ -273,6 +273,13 @@ module.exports = function registerHandlers(io) {
       io.to(socket.roomCode).emit('emoji-throw', { emoji, fromX: clamp(fromX), fromY: clamp(fromY), toX: clamp(toX), toY: clamp(toY) });
     });
 
+    // ── Jira session linking ────────────────────────────────────────────────────
+    socket.on('link-jira-session', ({ jiraSessionId }) => {
+      const room = rooms[socket.roomCode];
+      if (!room || !jiraSessions[jiraSessionId]) return;
+      room.jiraSessionId = jiraSessionId;
+    });
+
     // ── AI Estimation ──────────────────────────────────────────────────────────
     socket.on('ai-estimate', async ({ issueKey, jiraSessionId }) => {
       const room = rooms[socket.roomCode];

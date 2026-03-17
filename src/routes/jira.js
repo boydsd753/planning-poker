@@ -2,7 +2,7 @@
 
 const express    = require('express');
 const router     = express.Router();
-const { jiraSessions } = require('../state');
+const { jiraSessions, rooms } = require('../state');
 const { httpRequest }  = require('../utils');
 const { adfToText, adfToHtml } = require('../ai');
 
@@ -228,6 +228,126 @@ router.get('/api/jira/attachment/:id', async (req, res) => {
   }
 });
 
+
+// Room-proxied issue fetch — uses the room host's Jira session, no client auth required
+router.get('/api/jira/room/:roomCode/issue/:key', async (req, res) => {
+  const room = rooms[req.params.roomCode];
+  if (!room) return res.status(404).json({ error: 'Room not found.' });
+  const session = jiraSessions[room.jiraSessionId];
+  if (!session) return res.status(401).json({ error: 'No Jira session linked to this room.' });
+  // Re-use the existing issue handler logic by faking the session into req and calling the same logic
+  try {
+    await refreshIfNeeded(session);
+    const key = req.params.key.toUpperCase();
+    const { status, body } = await jiraFetch(session, `/rest/api/3/issue/${key}?fields=*all&expand=names`);
+    if (status !== 200) return res.status(status).json({ error: `Jira returned ${status}` });
+    const sessionId = room.jiraSessionId;
+    const result = await (async () => {
+      const parsed = JSON.parse(body);
+      const f      = parsed.fields;
+      const names  = parsed.names || {};
+      const SKIP_FIELDS = new Set([
+        'summary','description','status','issuetype','priority','labels','fixVersions',
+        'parent','subtasks','issuelinks','comment','attachment','assignee','reporter',
+        'creator','created','updated','lastViewed','watches','votes','worklog','components',
+        'environment','timetracking','timespent','timeestimate','timeoriginalestimate',
+        'aggregatetimespent','aggregatetimeestimate','aggregatetimeoriginalestimate',
+        'aggregateprogress','progress','versions','project','customfield_15945','customfield_15944',
+      ]);
+      const attachmentMap = {};
+      for (const a of (f.attachment || [])) {
+        if (a.id)       attachmentMap[`id:${a.id}`]       = a;
+        if (a.filename) attachmentMap[`fn:${a.filename}`] = a;
+      }
+      const extraSections = [];
+      for (const [fieldId, val] of Object.entries(f)) {
+        if (SKIP_FIELDS.has(fieldId)) continue;
+        if (val === null || val === undefined) continue;
+        const label = names[fieldId];
+        if (!label) continue;
+        if (typeof val === 'object' && val.type === 'doc') {
+          const text = adfToText(val).trim();
+          if (text) extraSections.push({ label, fieldId, html: adfToHtml(val, attachmentMap), text });
+        } else if (typeof val === 'string' && val.trim()) {
+          extraSections.push({ label, fieldId, html: `<p>${val.trim().replace(/\n/g, '<br>')}</p>`, text: val.trim() });
+        } else if (typeof val === 'number') {
+          extraSections.push({ label, fieldId, html: `<p>${val}</p>`, text: String(val) });
+        }
+      }
+      const description     = f.description ? adfToHtml(f.description, attachmentMap) : '';
+      const descriptionText = f.description ? adfToText(f.description).trim() : '';
+      const comments = (f.comment?.comments || []).slice(-10).map(c => ({
+        author: c.author?.displayName || 'Unknown',
+        html:   adfToHtml(c.body, attachmentMap),
+        date:   c.created?.slice(0, 10),
+      }));
+      const attachments = (f.attachment || []).map(a => ({
+        name:     a.filename,
+        mimeType: a.mimeType || '',
+        size:     a.size,
+        id:       a.id,
+        isImage:  /^image\//i.test(a.mimeType || ''),
+      }));
+      const linkedIssues = (f.issuelinks || []).map(l => {
+        const linked = l.inwardIssue || l.outwardIssue;
+        const dir    = l.inwardIssue ? l.type?.inward : l.type?.outward;
+        return linked ? `${dir}: ${linked.key} — ${linked.fields?.summary || ''}` : null;
+      }).filter(Boolean);
+      const subtasks = (f.subtasks || []).map(s =>
+        `${s.key}: ${s.fields?.summary || ''} [${s.fields?.status?.name || ''}]`
+      );
+      return {
+        key,
+        summary:         f.summary || '',
+        description,
+        descriptionText,
+        extraSections,
+        status:          f.status?.name || '',
+        type:            f.issuetype?.name || '',
+        priority:        f.priority?.name || '',
+        labels:          f.labels || [],
+        fixVersions:     (f.fixVersions || []).map(v => v.name),
+        components:      (f.components || []).map(c => c.name),
+        assignee:        f.assignee?.displayName || '',
+        epic:            f.parent?.fields?.issuetype?.name === 'Epic' ? `${f.parent.key}: ${f.parent.fields?.summary || ''}` : '',
+        devEstimate:     f['customfield_15945'] != null ? String(f['customfield_15945']) : '',
+        qaEstimate:      f['customfield_15944'] != null ? String(f['customfield_15944']) : '',
+        originalEstimate: f.timetracking?.originalEstimateSeconds != null
+          ? String(f.timetracking.originalEstimateSeconds / 3600) : '',
+        comments,
+        attachments,
+        linkedIssues,
+        subtasks,
+        _roomSessionId: sessionId,
+      };
+    })();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Room-proxied attachment — uses the room host's Jira session, no client auth required
+router.get('/api/jira/room/:roomCode/attachment/:id', async (req, res) => {
+  const { id, roomCode } = req.params;
+  if (!/^[\da-f-]+$/i.test(id)) return res.status(400).end();
+  const room = rooms[roomCode];
+  if (!room) return res.status(404).end();
+  const session = jiraSessions[room.jiraSessionId];
+  if (!session) return res.status(401).end();
+  try {
+    await refreshIfNeeded(session);
+    const fullPath = `/ex/jira/${session.cloudId}/rest/api/3/attachment/content/${id}`;
+    const { status, body, headers } = await httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'GET', fullPath, null, true);
+    if (status !== 200) return res.status(status).end();
+    const ct = headers?.['content-type'] || 'application/octet-stream';
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.end(body);
+  } catch {
+    res.status(500).end();
+  }
+});
 
 jiraRoute('post', '/api/jira/update-issue', async (req, res, session) => {
   const { issueKey, devEstimate, qaEstimate, originalEstimate } = req.body || {};

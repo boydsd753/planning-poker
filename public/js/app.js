@@ -333,6 +333,7 @@ socket.on('room-joined', ({ roomCode, sessionToken }) => {
   if (sessionToken) {
     sessionStorage.setItem('pp_session', JSON.stringify({ roomCode, sessionToken }));
   }
+  if (jiraSession) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
   showScreen('game');
   const url = new URL(window.location.href);
   url.searchParams.set('room', roomCode);
@@ -658,6 +659,7 @@ if (tablesContainer) {
   tablesContainer.addEventListener('click', e => {
     if (!selectedThrowEmoji || !myId) return;
     if (e.target.closest('#dealer-toggle')) return;
+    if (e.target.closest('.table-issue-view-btn')) return;
     const mySeat = document.querySelector(`.player-seat[data-player-id="${myId}"], .spectator-seat[data-player-id="${myId}"]`);
     if (!mySeat) return;
     const cr = tablesContainer.getBoundingClientRect();
@@ -927,7 +929,16 @@ async function openTicketModal(issueKey) {
   document.addEventListener('keydown', onEscTicket);
 
   try {
-    const data = await jiraGet(`/api/jira/issue/${issueKey}`);
+    let data;
+    if (jiraSession) {
+      data = await jiraGet(`/api/jira/issue/${issueKey}`);
+    } else if (myRoom) {
+      const res = await fetch(`/api/jira/room/${encodeURIComponent(myRoom)}/issue/${encodeURIComponent(issueKey)}`, { cache: 'no-store' });
+      data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    } else {
+      throw new Error('No Jira session — ask the host to link Jira.');
+    }
     renderTicketModal(data);
   } catch (err) {
     document.getElementById('ticket-modal-body').innerHTML =
@@ -1194,10 +1205,15 @@ function openReasoningModal(reasoning) {
   });
 }
 
-async function fetchAttachmentBlob(id) {
-  const res = await fetch(`/api/jira/attachment/${id}`, {
-    headers: { 'x-jira-session': jiraSession || '' },
-  });
+async function fetchAttachmentBlob(id, roomSessionId) {
+  let res;
+  if (jiraSession) {
+    res = await fetch(`/api/jira/attachment/${id}`, { headers: { 'x-jira-session': jiraSession } });
+  } else if (myRoom) {
+    res = await fetch(`/api/jira/room/${encodeURIComponent(myRoom)}/attachment/${id}`);
+  } else {
+    throw new Error('No Jira session');
+  }
   if (!res.ok) throw new Error(`${res.status}`);
   const blob = await res.blob();
   return { blob, url: URL.createObjectURL(blob), type: blob.type };
@@ -2027,6 +2043,7 @@ btnLinkJira.addEventListener('click', () => {
       jiraDomain  = e.data.jiraDomain;
       localStorage.setItem('jiraSession', jiraSession);
       localStorage.setItem('jiraDomain',  jiraDomain);
+      if (myRoom) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
       updateJiraButton(true);
       showToast(`Jira linked: ${escHtml(jiraDomain)}`, 'join');
       if (btnLinkJira._openImportAfterAuth) {

@@ -327,8 +327,6 @@ function getSettings() {
 
 // Socket
 const socket = io();
-socket.on('connect', () => { myId = socket.id; });
-
 socket.on('room-joined', ({ roomCode, sessionToken }) => {
   myRoom = roomCode;
   roomCodeDisplay.textContent = roomCode;
@@ -2188,11 +2186,47 @@ function renderIssues(issues, activeId) {
 let jiraSession = localStorage.getItem('jiraSession') || null;
 let jiraDomain  = localStorage.getItem('jiraDomain')  || null;
 
+function saveJiraTokenData(tokenData) {
+  localStorage.setItem('jiraTokenData', JSON.stringify(tokenData));
+}
+
 function clearJiraSession() {
   jiraSession = null; jiraDomain = null;
   localStorage.removeItem('jiraSession');
   localStorage.removeItem('jiraDomain');
+  localStorage.removeItem('jiraTokenData');
 }
+
+// On socket connect, restore server session from stored tokens if session key exists
+socket.on('connect', () => {
+  myId = socket.id;
+  const raw = localStorage.getItem('jiraTokenData');
+  if (jiraSession && raw) {
+    try {
+      const tokenData = JSON.parse(raw);
+      socket.emit('restore-jira-session', { sessionId: jiraSession, ...tokenData });
+    } catch {}
+  }
+});
+
+// Server confirmed session is valid (tokens refreshed if needed)
+socket.on('jira-session-restored', (tokenData) => {
+  saveJiraTokenData(tokenData);
+  // Ensure room is linked if we're already in one
+  if (myRoom) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
+});
+
+// Server refreshed the access token mid-session — update stored tokens
+socket.on('jira-tokens-updated', (tokenData) => {
+  saveJiraTokenData(tokenData);
+});
+
+// Refresh token expired — clear stale session and update UI
+socket.on('jira-session-invalid', () => {
+  clearJiraSession();
+  updateJiraButton(true);
+  showToast('Jira session expired — please re-link Jira', 'leave');
+});
 
 function jiraHeaders() {
   return { 'Content-Type': 'application/json', 'x-jira-session': jiraSession || '' };
@@ -2228,6 +2262,7 @@ btnLinkJira.addEventListener('click', () => {
       jiraDomain  = e.data.jiraDomain;
       localStorage.setItem('jiraSession', jiraSession);
       localStorage.setItem('jiraDomain',  jiraDomain);
+      if (e.data.jiraTokenData) saveJiraTokenData(e.data.jiraTokenData);
       if (myRoom) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
       updateJiraButton(true);
       showToast(`Jira linked: ${escHtml(jiraDomain)}`, 'join');

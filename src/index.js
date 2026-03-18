@@ -15,7 +15,7 @@ const io     = new Server(server, {
 
 const securityHeaders  = require('./middleware/security');
 const authRouter       = require('./routes/auth');
-const jiraRouter       = require('./routes/jira');
+const { router: jiraRouter } = require('./routes/jira');
 const registerHandlers = require('./socket/handlers');
 
 // ── Middleware ────────────────────────────────────────────────────────────────

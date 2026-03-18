@@ -19,9 +19,9 @@ function jiraPost(session, apiPath, body) {
   return httpRequest('api.atlassian.com', `Bearer ${session.accessToken}`, 'POST', `/ex/jira/${session.cloudId}${apiPath}`, body);
 }
 
+// Returns true if a refresh was performed (so callers can sync updated tokens back to client)
 async function refreshIfNeeded(session) {
-  // Refresh when within 5 minutes of expiry
-  if (Date.now() < session.expiresAt - 5 * 60 * 1000) return;
+  if (Date.now() < session.expiresAt - 5 * 60 * 1000) return false;
   if (!session.refreshToken) throw new Error('No refresh token — user must re-link Jira.');
   console.log('[jira oauth] access token expiring, refreshing…');
   const tokenRes = await httpRequest('auth.atlassian.com', null, 'POST', '/oauth/token', {
@@ -33,9 +33,14 @@ async function refreshIfNeeded(session) {
   if (tokenRes.status !== 200) throw new Error('Token refresh failed — user must re-link Jira.');
   const { access_token, refresh_token, expires_in } = JSON.parse(tokenRes.body);
   session.accessToken  = access_token;
-  if (refresh_token) session.refreshToken = refresh_token; // Atlassian may rotate it
+  if (refresh_token) session.refreshToken = refresh_token;
   session.expiresAt    = Date.now() + (expires_in || 3600) * 1000;
   console.log(`[jira oauth] token refreshed, next expiry in ${expires_in || 3600}s`);
+  return true;
+}
+
+function sessionSnapshot(session) {
+  return { accessToken: session.accessToken, refreshToken: session.refreshToken, expiresAt: session.expiresAt, cloudId: session.cloudId, domain: session.domain };
 }
 
 function jiraRoute(method, route, handler) {
@@ -410,4 +415,4 @@ jiraRoute('post', '/api/jira/comment', async (req, res, session) => {
   res.json({ author: c.author?.displayName || 'You', date: c.created?.slice(0, 10), text: text.trim() });
 });
 
-module.exports = router;
+module.exports = { router, refreshIfNeeded, sessionSnapshot };

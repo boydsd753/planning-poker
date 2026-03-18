@@ -68,7 +68,8 @@ router.get('/auth/jira/callback', async (req, res) => {
       domain,
     };
 
-    res.send(`<script>window.opener?.postMessage({jiraSession:${JSON.stringify(sessionId)},jiraDomain:${JSON.stringify(domain)}},location.origin);window.close();</script>`);
+    const tokenData = { accessToken: access_token, refreshToken: refresh_token || null, expiresAt: Date.now() + (expires_in || 3600) * 1000, cloudId, domain };
+    res.send(`<script>window.opener?.postMessage({jiraSession:${JSON.stringify(sessionId)},jiraDomain:${JSON.stringify(domain)},jiraTokenData:${JSON.stringify(tokenData)}},location.origin);window.close();</script>`);
   } catch (err) {
     fail(err.message);
   }

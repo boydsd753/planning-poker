@@ -4,6 +4,7 @@ const { rooms, jiraSessions }                = require('../state');
 const { generateId, sanitizeSettings }       = require('../utils');
 const { generateRoomCode }                   = require('../utils');
 const { estimateIssue }                      = require('../ai');
+const { refreshIfNeeded, sessionSnapshot }   = require('../routes/jira');
 
 // sessionToken → { roomCode, playerData, disconnectTimer }
 const sessions = {};
@@ -315,6 +316,27 @@ module.exports = function registerHandlers(io) {
       const room = rooms[socket.roomCode];
       if (!room || !jiraSessions[jiraSessionId]) return;
       room.jiraSessionId = jiraSessionId;
+    });
+
+    // ── Jira session restore (after server restart) ─────────────────────────────
+    socket.on('restore-jira-session', async ({ sessionId, accessToken, refreshToken, expiresAt, cloudId, domain }) => {
+      if (!sessionId || !accessToken || !cloudId) return;
+      // Rebuild the in-memory session from client-stored tokens
+      jiraSessions[sessionId] = { accessToken, refreshToken: refreshToken || null, expiresAt: expiresAt || 0, cloudId, domain };
+      try {
+        const refreshed = await refreshIfNeeded(jiraSessions[sessionId]);
+        const snap = sessionSnapshot(jiraSessions[sessionId]);
+        // If refresh rotated tokens, send updated ones back so client saves them
+        if (refreshed) socket.emit('jira-tokens-updated', snap);
+        socket.emit('jira-session-restored', snap);
+        // Re-link to the room if host is already in one
+        const room = rooms[socket.roomCode];
+        if (room) room.jiraSessionId = sessionId;
+      } catch (err) {
+        // Refresh token expired or invalid — client must re-auth
+        delete jiraSessions[sessionId];
+        socket.emit('jira-session-invalid');
+      }
     });
 
     // ── AI Estimation ──────────────────────────────────────────────────────────

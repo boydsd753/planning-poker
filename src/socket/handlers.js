@@ -16,7 +16,8 @@ module.exports = function registerHandlers(io) {
 
     function sanitizeAvatar(raw) {
       if (typeof raw !== 'string') return null;
-      if (!raw.startsWith('data:image/')) return null;
+      const allowed = ['data:image/jpeg;base64,', 'data:image/png;base64,', 'data:image/webp;base64,'];
+      if (!allowed.some(prefix => raw.startsWith(prefix))) return null;
       if (raw.length > 30000) return null; // ~22KB decoded, enough for 64x64 JPEG
       return raw;
     }

@@ -2594,7 +2594,7 @@ document.addEventListener('click', () => {
 async function doFetch() {
   const projectKey = selectedProjectKey;
   if (!projectKey) return;
-  jiraResults.innerHTML = '<p class="jira-fetching">Fetching issues…</p>';
+  jiraResults.innerHTML = '<p class="jira-fetching"><span>Fetching issues<span class="jira-fetching-dots"></span></span><span class="jira-fetching-spinner"></span></p>';
   jiraResults.classList.remove('hidden');
   allFetchedIssues = [];
   activeFilters = { search: '', types: new Set(), versions: new Set(), labels: new Set(), priorities: new Set() };

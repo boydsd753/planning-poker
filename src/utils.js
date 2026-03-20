@@ -5,7 +5,7 @@ const https = require('https');
 const DEFAULT_SETTINGS = {
   gameName:        '',
   deck:            'fibonacci',
-  whoCanReveal:    'host',
+  whoCanReveal:    'all',
   autoReveal:      false,
   showAverage:     true,
   countdown:       true,

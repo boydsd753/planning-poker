@@ -8,7 +8,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#3448ff">
-  <meta name="description" content="Free planning poker for agile teams. No sign-up required. Estimate story points together in real time.">
+  <meta name="description" content="Free planning poker for agile teams. Estimate story points together in real time.">
   <meta property="og:title" content="Planning Poker Pro">
   <meta property="og:description" content="Free planning poker for agile teams. No sign-up required. Estimate story points together in real time.">
   <meta property="og:type" content="website">
@@ -30,11 +30,23 @@
 
   <!-- ── Landing ──────────────────────────────────────────────────────────── -->
   <div id="screen-landing" class="screen active">
+
+    <!-- Auth bar top right -->
+    <div class="auth-bar" id="auth-bar">
+      <div id="auth-bar-guest">
+        <button class="btn-auth-bar" id="btn-open-signin">Sign In</button>
+        <button class="btn-auth-bar btn-auth-bar--primary" id="btn-open-signup">Sign Up</button>
+      </div>
+      <div id="auth-bar-user" class="hidden">
+        <span class="auth-bar-name" id="auth-bar-name"></span>
+        <button class="btn-auth-bar" id="btn-signout">Sign Out</button>
+      </div>
+    </div>
+
     <div class="landing-box">
       <div class="logo">
-
         <h1>Planning Poker Pro</h1>
-        <p>Free &amp; real-time — no account needed</p>
+        <p>Real-time planning poker for agile teams</p>
       </div>
 
       <div class="avatar-pick-group">
@@ -439,9 +451,93 @@
   <!-- Toast container -->
   <div id="toasts" class="toasts"></div>
 
+  <!-- ── Auth Modal ──────────────────────────────────────────────────────── -->
+  <div id="auth-modal" class="modal-backdrop hidden">
+    <div class="modal-box auth-modal-box">
+
+      <div class="modal-header">
+        <span class="modal-title">Welcome to Planning Poker Pro</span>
+        <button id="btn-auth-close" class="btn-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab-btn active" data-tab="signin">Sign In</button>
+        <button class="auth-tab-btn" data-tab="signup">Sign Up</button>
+      </div>
+
+      <!-- Sign In -->
+      <div id="auth-tab-signin" class="auth-tab-panel">
+        <div class="input-group">
+          <label for="auth-email-signin">Email</label>
+          <input id="auth-email-signin" type="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="input-group">
+          <label for="auth-password-signin">Password</label>
+          <input id="auth-password-signin" type="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <p class="auth-error" id="auth-error-signin"></p>
+        <button id="btn-signin" class="btn-primary" data-label="Sign In">Sign In</button>
+        <button id="btn-forgot" class="btn-link-subtle">Forgot password?</button>
+        <div class="auth-divider"><span>or</span></div>
+        <div class="oauth-btns">
+          <button class="btn-oauth" id="btn-oauth-google-signin" data-provider="google">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Continue with Google
+          </button>
+        </div>
+      </div>
+
+      <!-- Sign Up -->
+      <div id="auth-tab-signup" class="auth-tab-panel hidden">
+        <div class="input-group">
+          <label for="auth-nickname">Your name</label>
+          <input id="auth-nickname" type="text" placeholder="e.g. Alex" maxlength="20" autocomplete="nickname">
+        </div>
+        <div class="input-group">
+          <label for="auth-email-signup">Email</label>
+          <input id="auth-email-signup" type="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="input-group">
+          <label for="auth-password-signup">Password <span class="label-optional">(min 8 characters)</span></label>
+          <input id="auth-password-signup" type="password" placeholder="••••••••" autocomplete="new-password">
+        </div>
+        <p class="auth-error" id="auth-error-signup"></p>
+        <button id="btn-signup" class="btn-primary" data-label="Create Account">Create Account</button>
+        <div class="auth-divider"><span>or</span></div>
+        <div class="oauth-btns">
+          <button class="btn-oauth" id="btn-oauth-google-signup" data-provider="google">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Sign up with Google
+          </button>
+        </div>
+      </div>
+
+      <!-- Forgot Password -->
+      <div id="auth-tab-forgot" class="auth-tab-panel hidden">
+        <p class="auth-hint">Enter your email and we'll send you a reset link.</p>
+        <div class="input-group">
+          <label for="auth-email-forgot">Email</label>
+          <input id="auth-email-forgot" type="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <p class="auth-error" id="auth-error-forgot"></p>
+        <button id="btn-reset" class="btn-primary" data-label="Send Reset Email">Send Reset Email</button>
+        <button id="btn-back-signin" class="btn-link-subtle">Back to sign in</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Auth loading overlay -->
+  <div id="auth-loading-overlay" class="auth-loading-overlay hidden">
+    <div class="auth-loading-spinner"></div>
+  </div>
+
   <script src="/js/vendor/mammoth.min.js"></script>
   <script src="/js/vendor/xlsx.full.min.js"></script>
+  <script src="/js/vendor/supabase.min.js"></script>
+  <script src="/config.js"></script>
   <script src="/socket.io/socket.io.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

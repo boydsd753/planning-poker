@@ -18,7 +18,7 @@ module.exports = function securityHeaders(req, res, next) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
-    "connect-src 'self' wss: ws:",
+    `connect-src 'self' wss: ws: ${process.env.SUPABASE_URL || ''}`,
     "frame-src 'self' blob:",
     "media-src 'self' blob:",
     "frame-ancestors 'none'",

@@ -30,6 +30,15 @@ app.get('/js/vendor/mammoth.min.js', (req, res) =>
 app.get('/js/vendor/xlsx.full.min.js', (req, res) =>
   res.sendFile(path.join(__dirname, '..', 'node_modules', 'xlsx', 'dist', 'xlsx.full.min.js')));
 
+// ── Expose publishable Supabase key to frontend (safe to be public) ───────────
+app.get('/config.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`window.APP_CONFIG = ${JSON.stringify({
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY,
+  })};`);
+});
+
 // ── Utility routes ────────────────────────────────────────────────────────────
 app.get('/health',  (req, res) => res.sendStatus(200));
 app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html')));

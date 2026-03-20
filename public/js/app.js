@@ -2219,6 +2219,7 @@ socket.on('jira-session-restored', (tokenData) => {
 // Server refreshed the access token mid-session — update stored tokens
 socket.on('jira-tokens-updated', (tokenData) => {
   saveJiraTokenData(tokenData);
+  Auth.updateJiraTokens(tokenData.accessToken, tokenData.refreshToken, tokenData.expiresAt);
 });
 
 // Refresh token expired — clear stale session and update UI
@@ -2262,7 +2263,12 @@ btnLinkJira.addEventListener('click', () => {
       jiraDomain  = e.data.jiraDomain;
       localStorage.setItem('jiraSession', jiraSession);
       localStorage.setItem('jiraDomain',  jiraDomain);
-      if (e.data.jiraTokenData) saveJiraTokenData(e.data.jiraTokenData);
+      if (e.data.jiraTokenData) {
+        saveJiraTokenData(e.data.jiraTokenData);
+        // Also persist to Supabase if user is logged in
+        const td = e.data.jiraTokenData;
+        Auth.saveJiraConnection(jiraSession, td.accessToken, td.refreshToken, td.expiresAt, td.cloudId, td.domain);
+      }
       if (myRoom) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
       updateJiraButton(true);
       showToast(`Jira linked: ${escHtml(jiraDomain)}`, 'join');
@@ -2803,3 +2809,61 @@ function getInitials(name) {
 function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ── Auth integration ────────────────────────────────────────────────────────
+const authBarGuest = document.getElementById('auth-bar-guest');
+const authBarUser  = document.getElementById('auth-bar-user');
+const authBarName  = document.getElementById('auth-bar-name');
+
+function updateAuthBar(user) {
+  if (user) {
+    authBarGuest?.classList.add('hidden');
+    authBarUser?.classList.remove('hidden');
+    const fullName = user.user_metadata?.full_name || user.email || '';
+    const name = fullName.split(' ')[0];
+    if (authBarName) authBarName.textContent = name;
+    // Pre-fill name input on landing
+    const inp = document.getElementById('inp-name');
+    if (inp && !inp.value) inp.value = name.slice(0, 20);
+  } else {
+    authBarGuest?.classList.remove('hidden');
+    authBarUser?.classList.add('hidden');
+  }
+}
+
+document.getElementById('btn-open-signin')?.addEventListener('click', () => Auth.openAuthModal('signin'));
+document.getElementById('btn-open-signup')?.addEventListener('click', () => Auth.openAuthModal('signup'));
+document.getElementById('btn-signout')?.addEventListener('click', async () => {
+  document.getElementById('auth-loading-overlay')?.classList.remove('hidden');
+  await Auth.signOut();
+  document.getElementById('auth-loading-overlay')?.classList.add('hidden');
+  showToast('Signed out', 'leave');
+});
+
+// Init auth modal and listen for auth state changes
+Auth.initAuthModal();
+let _authInitialized = false;
+Auth.onAuthStateChange(async (user, event) => {
+  updateAuthBar(user);
+
+  if (user && event === 'SIGNED_IN' && _authInitialized) {
+    const _firstName = (user.user_metadata?.full_name || user.email || '').split(' ')[0];
+    showToast(`Welcome, ${escHtml(_firstName)}!`, 'join');
+
+    // Load Jira connection from Supabase if not already linked
+    if (!jiraSession) {
+      const conn = await Auth.loadJiraConnection();
+      if (conn) {
+        jiraSession = conn.sessionId;
+        jiraDomain  = conn.domain;
+        localStorage.setItem('jiraSession', jiraSession);
+        localStorage.setItem('jiraDomain',  jiraDomain);
+        saveJiraTokenData({ accessToken: conn.accessToken, refreshToken: conn.refreshToken, expiresAt: conn.expiresAt, cloudId: conn.cloudId, domain: conn.domain });
+        if (myRoom) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
+        updateJiraButton(true);
+      }
+    }
+  }
+
+  _authInitialized = true;
+});

@@ -98,11 +98,6 @@ function render(d) {
   $('s-rss-label').textContent = `${d.server.memRss} MB`;
   $('s-rss-bar').style.width   = rssPct + '%';
 
-  const load    = parseFloat(d.server.loadAvg[0]);
-  const loadPct = Math.min(Math.round(load * 25), 100);
-  $('s-load-label').textContent = d.server.loadAvg.join(' · ');
-  $('s-load-bar').style.width   = loadPct + '%';
-  $('s-load-bar').className     = 'progress-fill' + (load > 3 ? ' red' : load > 1.5 ? ' amber' : '');
 
   // Rooms
   const rc = $('rooms-container');

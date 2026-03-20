@@ -405,7 +405,11 @@ module.exports = function registerHandlers(io) {
         delete room.players[socket.id];
         if (token) delete sessions[token];
         const remaining = Object.values(room.players);
-        if (remaining.length === 0) { delete rooms[roomCode]; return; }
+        if (remaining.length === 0) {
+          if (room.jiraSessionId) delete jiraSessions[room.jiraSessionId];
+          delete rooms[roomCode];
+          return;
+        }
         if (wasAdmin) remaining[0].isAdmin = true;
         io.to(roomCode).emit('room-update', room);
         console.log(`[disconnect] ${socket.id} removed from ${roomCode} (grace expired)`);

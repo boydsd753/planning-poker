@@ -81,7 +81,7 @@ function formatUptime(seconds) {
   return `${s}s`;
 }
 
-router.get('/admin', requireAdmin, (req, res) => {
+router.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, '..', '..', 'public', 'admin', 'index.html'));
 });
 

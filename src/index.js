@@ -16,6 +16,7 @@ const io     = new Server(server, {
 const securityHeaders  = require('./middleware/security');
 const authRouter       = require('./routes/auth');
 const { router: jiraRouter } = require('./routes/jira');
+const { router: adminRouter, buildStats, requireAdmin } = require('./routes/admin');
 const registerHandlers = require('./socket/handlers');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -36,9 +37,27 @@ app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, '..', 'publi
 // ── Feature routes ────────────────────────────────────────────────────────────
 app.use(authRouter);
 app.use(jiraRouter);
+app.use(adminRouter);
+app.set('io', io);
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 registerHandlers(io);
+
+// ── Admin real-time push (every 2s to /admin namespace) ───────────────────────
+const adminNsp = io.of('/admin');
+adminNsp.use((socket, next) => {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret || socket.handshake.auth.token !== secret) {
+    return next(new Error('Unauthorized'));
+  }
+  next();
+});
+adminNsp.on('connection', socket => {
+  const send = () => socket.emit('stats', buildStats(io));
+  send();
+  const iv = setInterval(send, 2000);
+  socket.on('disconnect', () => clearInterval(iv));
+});
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).sendFile(path.join(__dirname, '..', 'public', '404.html')));

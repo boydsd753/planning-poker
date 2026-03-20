@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Planning Poker Pro</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #f0f2f8;
+      --surface: rgba(255,255,255,0.72);
+      --border:  rgba(8,17,46,0.08);
+      --text:    #08112e;
+      --muted:   #5c6380;
+      --primary: #3448ff;
+      --green:   #1a9e5c;
+      --amber:   #d97706;
+      --red:     #dc2626;
+    }
+
+    body {
+      font-family: Inter, -apple-system, sans-serif;
+      background:
+        radial-gradient(ellipse at 20% 15%, rgba(52,72,255,0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 75%, rgba(161,137,227,0.12) 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 24px 48px;
+    }
+
+    /* ── Auth gate ── */
+    #gate {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; margin: -32px -24px;
+    }
+    .gate-box {
+      background: var(--surface);
+      backdrop-filter: blur(40px);
+      border: 1px solid rgba(255,255,255,0.85);
+      border-radius: 20px;
+      padding: 32px;
+      width: 340px;
+      box-shadow: 0 20px 60px rgba(8,17,46,0.12);
+    }
+    .gate-box h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .gate-box p  { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .gate-box input {
+      width: 100%; padding: 10px 14px; border-radius: 10px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.8);
+      font-family: inherit; font-size: 14px; color: var(--text);
+      margin-bottom: 12px; outline: none;
+    }
+    .gate-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(52,72,255,0.12); }
+    .gate-error { font-size: 12px; color: var(--red); margin-bottom: 10px; min-height: 16px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer; font-family: inherit; transition: opacity 0.15s;
+    }
+    .btn-primary { background: var(--primary); color: white; width: 100%; }
+    .btn-primary:hover { opacity: 0.88; }
+
+    /* ── Dashboard ── */
+    #dashboard { display: none; max-width: 1100px; margin: 0 auto; }
+
+    .dash-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .dash-header h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
+    .dash-header p  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .live-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600; color: var(--green);
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    /* ── Grid ── */
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      backdrop-filter: blur(32px);
+      border: 1px solid rgba(255,255,255,0.85);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(8,17,46,0.06);
+    }
+    .card-label {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+    }
+    .card-value {
+      font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--text);
+      line-height: 1;
+    }
+    .card-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .card-value.green { color: var(--green); }
+    .card-value.amber { color: var(--amber); }
+    .card-value.red   { color: var(--red); }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 13px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 12px; margin-top: 8px;
+    }
+
+    /* ── Server health bars ── */
+    .health-card { display: flex; flex-direction: column; gap: 14px; }
+    .health-row  { display: flex; flex-direction: column; gap: 5px; }
+    .health-label { display: flex; justify-content: space-between; font-size: 12px; }
+    .health-label span { color: var(--muted); }
+    .progress-track {
+      height: 6px; background: rgba(8,17,46,0.08); border-radius: 99px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: var(--primary);
+      transition: width 0.5s ease;
+    }
+    .progress-fill.amber { background: var(--amber); }
+    .progress-fill.red   { background: var(--red); }
+
+    /* ── Rooms table ── */
+    .rooms-card { overflow: hidden; }
+    .rooms-empty { text-align: center; padding: 32px; color: var(--muted); font-size: 13px; }
+    .room-list { display: flex; flex-direction: column; gap: 0; }
+    .room-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .room-row:last-child { border-bottom: none; }
+    .room-code { font-weight: 700; font-size: 14px; letter-spacing: 0.05em; color: var(--primary); }
+    .room-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .room-badges { display: flex; gap: 6px; align-items: center; }
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600;
+    }
+    .badge-blue   { background: rgba(52,72,255,0.1);  color: var(--primary); }
+    .badge-green  { background: rgba(26,158,92,0.1);  color: var(--green); }
+    .badge-amber  { background: rgba(217,119,6,0.1);  color: var(--amber); }
+    .badge-gray   { background: rgba(8,17,46,0.06);   color: var(--muted); }
+
+    /* ── Players list ── */
+    .player-rows { display: flex; flex-direction: column; gap: 0; }
+    .player-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .player-row:last-child { border-bottom: none; }
+    .player-name { font-weight: 600; flex: 1; }
+    .player-room { color: var(--muted); font-size: 11px; }
+
+    /* ── Log ── */
+    .log-box {
+      font-family: 'Courier New', monospace; font-size: 11px;
+      color: var(--muted); line-height: 1.7;
+      max-height: 140px; overflow-y: auto;
+    }
+    .log-entry { display: flex; gap: 10px; }
+    .log-time  { color: var(--primary); flex-shrink: 0; }
+
+    @media (max-width: 768px) {
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .grid-3 { grid-template-columns: repeat(2, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .grid-4 { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Auth Gate ── -->
+<div id="gate">
+  <div class="gate-box">
+    <h2>Admin Access</h2>
+    <p>Enter your admin secret to continue.</p>
+    <input type="password" id="gate-input" placeholder="Admin secret" autocomplete="off">
+    <p class="gate-error" id="gate-error"></p>
+    <button class="btn btn-primary" id="gate-btn">Access Dashboard</button>
+  </div>
+</div>
+
+<!-- ── Dashboard ── -->
+<div id="dashboard">
+
+  <div class="dash-header">
+    <div>
+      <h1>Planning Poker Pro</h1>
+      <p id="dash-started">Server started —</p>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+  </div>
+
+  <!-- Live stats -->
+  <p class="section-title">Live</p>
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-label">Active Rooms</div>
+      <div class="card-value" id="s-rooms">—</div>
+      <div class="card-sub" id="s-sockets">— connected sockets</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Players Online</div>
+      <div class="card-value green" id="s-players">—</div>
+      <div class="card-sub" id="s-peak">Peak: —</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Jira Connections</div>
+      <div class="card-value" id="s-jira">—</div>
+      <div class="card-sub">Active OAuth sessions</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Rounds Completed</div>
+      <div class="card-value" id="s-rounds">—</div>
+      <div class="card-sub">Since last restart</div>
+    </div>
+  </div>
+
+  <!-- AI stats -->
+  <p class="section-title">AI Estimator (Claude)</p>
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-label">Total Estimates</div>
+      <div class="card-value" id="s-ai-total">—</div>
+      <div class="card-sub">Since last restart</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Tokens Used</div>
+      <div class="card-value" id="s-ai-tokens">—</div>
+      <div class="card-sub" id="s-ai-tokens-sub">— in · — out</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Insufficient Data</div>
+      <div class="card-value amber" id="s-ai-insuf">—</div>
+      <div class="card-sub">Tickets with no context</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Errors</div>
+      <div class="card-value red" id="s-ai-err">—</div>
+      <div class="card-sub">Claude API failures</div>
+    </div>
+  </div>
+
+  <!-- Claude rate limits -->
+  <div class="card" id="claude-rl-card" style="margin-bottom:20px">
+    <div class="card-label">Claude Rate Limits <span id="claude-rl-reset" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:8px;color:var(--muted)"></span></div>
+    <div id="claude-rl-body" style="color:var(--muted);font-size:13px;margin-top:8px">No Claude calls made yet this session.</div>
+  </div>
+
+  <!-- Server health -->
+  <p class="section-title">Server Health</p>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-label">Uptime</div>
+      <div class="card-value" id="s-uptime">—</div>
+      <div class="card-sub" id="s-node">Node —</div>
+    </div>
+    <div class="card health-card">
+      <div class="health-row">
+        <div class="health-label">
+          <strong>Heap Used</strong>
+          <span id="s-heap-label">— / — MB</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="s-heap-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="health-row">
+        <div class="health-label">
+          <strong>RSS Memory</strong>
+          <span id="s-rss-label">— MB</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="s-rss-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="health-row">
+        <div class="health-label">
+          <strong>Load Avg (1m)</strong>
+          <span id="s-load-label">—</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="s-load-bar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active rooms -->
+  <p class="section-title">Active Rooms</p>
+  <div class="card rooms-card" style="margin-bottom:20px">
+    <div id="rooms-container">
+      <div class="rooms-empty">No active rooms</div>
+    </div>
+  </div>
+
+  <!-- All players -->
+  <p class="section-title">Players Online</p>
+  <div class="card" style="margin-bottom:20px">
+    <div id="players-container">
+      <div class="rooms-empty">No players online</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/admin/admin.js"></script>
+
+</body>
+</html>

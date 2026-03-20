@@ -1,6 +1,6 @@
 'use strict';
 
-const { rooms, jiraSessions }                = require('../state');
+const { rooms, jiraSessions, stats }         = require('../state');
 const { generateId, sanitizeSettings }       = require('../utils');
 const { generateRoomCode }                   = require('../utils');
 const { estimateIssue }                      = require('../ai');
@@ -83,6 +83,8 @@ module.exports = function registerHandlers(io) {
       socket.roomCode = code;
       socket.emit('room-joined', { roomCode: code, sessionToken: token });
       io.to(code).emit('room-update', room);
+      const totalNow = Object.values(rooms).reduce((s, r) => s + Object.keys(r.players).length, 0);
+      if (totalNow > stats.peakPlayers) stats.peakPlayers = totalNow;
       console.log(`[join]       ${socket.id} joined ${code}${isSpectator ? ' (spectator)' : ''}`);
     });
 
@@ -186,6 +188,7 @@ module.exports = function registerHandlers(io) {
       const player = room.players[socket.id];
       const canReveal = player?.isAdmin || room.settings.whoCanReveal === 'all';
       if (!canReveal) return;
+      stats.roundsCompleted++;
       room.revealed = false;
       Object.values(room.players).forEach(p => { p.card = null; });
       // Reset timer on new round
@@ -373,10 +376,16 @@ module.exports = function registerHandlers(io) {
           }
         }
 
+        stats.aiEstimatesTotal++;
+        if (result.insufficient) stats.aiEstimatesInsufficient++;
+        stats.aiTokensInput  += result.usage?.input  || 0;
+        stats.aiTokensOutput += result.usage?.output || 0;
+        if (result.usage?.rateLimits) stats.aiRateLimits = result.usage.rateLimits;
         io.to(socket.roomCode).emit('ai-estimate-result', result);
         if (!result.insufficient) io.to(socket.roomCode).emit('room-update', room);
         console.log(`[ai-estimate] ${issueKey} team:${validTeam} insufficient:${!!result.insufficient} → dev:${result.dev}h qa:${result.qa}h`);
       } catch (err) {
+        stats.aiEstimatesErrors++;
         console.error('[ai-estimate] error:', err.message);
         io.to(socket.roomCode).emit('ai-estimate-error', { error: err.message });
       }

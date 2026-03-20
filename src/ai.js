@@ -192,11 +192,19 @@ Otherwise respond in this exact JSON format only, no other text:
   "reasoning": "<2-3 sentence explanation>"
 }`}`;
 
-  const message = await anthropic.messages.create({
+  const { data: message, response: httpRes } = await anthropic.messages.create({
     model:      'claude-sonnet-4-6',
     max_tokens: 512,
     messages:   [{ role: 'user', content: prompt }],
-  });
+  }).withResponse();
+
+  const rateLimits = {
+    requestsLimit:     parseInt(httpRes.headers.get('anthropic-ratelimit-requests-limit')      || '0'),
+    requestsRemaining: parseInt(httpRes.headers.get('anthropic-ratelimit-requests-remaining')  || '0'),
+    tokensLimit:       parseInt(httpRes.headers.get('anthropic-ratelimit-tokens-limit')        || '0'),
+    tokensRemaining:   parseInt(httpRes.headers.get('anthropic-ratelimit-tokens-remaining')    || '0'),
+    tokensReset:       httpRes.headers.get('anthropic-ratelimit-tokens-reset') || null,
+  };
 
   const text = message.content[0]?.text || '';
   let parsed;
@@ -206,8 +214,10 @@ Otherwise respond in this exact JSON format only, no other text:
     throw new Error('AI response could not be parsed');
   }
 
+  const usage = { input: message.usage?.input_tokens || 0, output: message.usage?.output_tokens || 0, rateLimits };
+
   if (parsed.insufficient) {
-    return { insufficient: true, reasoning: String(parsed.reasoning || ''), team };
+    return { insufficient: true, reasoning: String(parsed.reasoning || ''), team, usage };
   }
 
   return {
@@ -215,6 +225,7 @@ Otherwise respond in this exact JSON format only, no other text:
     qa:        team !== 'dev' ? (Number(parsed.qa)  || 0) : null,
     reasoning: String(parsed.reasoning || ''),
     team,
+    usage,
   };
 }
 

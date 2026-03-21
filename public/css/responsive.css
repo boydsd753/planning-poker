@@ -75,12 +75,8 @@
     padding: 0 0 20px;
   }
 
-  /* Auth bar: tuck into top-right with tighter spacing */
-  .auth-bar { top: 12px; right: 12px; }
-  .btn-auth-bar { padding: 6px 11px; font-size: 12px; }
-
-  /* Landing box: full width with top margin to clear the auth bar */
-  .landing-box { padding: 18px 16px; gap: 10px; margin: 56px 12px 0; width: calc(100% - 24px); border-radius: 20px; }
+  /* Landing box: full width */
+  .landing-box { padding: 18px 16px; gap: 10px; margin: 10px 12px 0; width: calc(100% - 24px); border-radius: 20px; }
   .logo { margin-bottom: 2px; }
   .logo-icon { font-size: 32px; }
   .logo h1 { font-size: 20px; margin-top: 4px; }

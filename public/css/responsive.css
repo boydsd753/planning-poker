@@ -208,24 +208,19 @@
   .results-votes { gap: 3px; }
   .results-avg { font-size: 12px; }
 
-  /* ── Modals: bottom sheet ── */
+  /* ── Modals: centered, upper half of screen ── */
   .modal-backdrop {
-    align-items: flex-end;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    align-items: flex-start;
+    padding: 48px 16px 16px;
   }
   .modal-box {
     min-width: 0;
     width: 100%;
-    border-radius: 20px 20px 0 0;
+    border-radius: 20px;
     padding: 20px 16px 24px;
-    animation: modalInMobile 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    max-height: 90svh;
+    max-height: 85svh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-  }
-  @keyframes modalInMobile {
-    from { opacity: 0; transform: translateY(32px); }
-    to   { opacity: 1; transform: translateY(0); }
   }
   .jira-modal-box { max-width: none; max-height: 85svh; overflow-y: auto; }
 

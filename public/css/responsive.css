@@ -71,15 +71,15 @@
 
   /* Landing — scrollable so all content (incl. privacy link) is reachable */
   #screen-landing {
-    height: auto;
-    min-height: 100svh;
+    height: 100svh;
     align-items: flex-start;
+    flex-direction: column;
     padding: 0 0 32px;
-    overflow-y: visible;
+    overflow-y: auto;
   }
 
   /* Landing box: full width */
-  .landing-box { padding: 18px 16px; gap: 10px; margin: 10px 12px 0; width: calc(100% - 24px); border-radius: 20px; }
+  .landing-box { padding: 18px 16px; gap: 10px; margin: 10px 12px 0; width: calc(100% - 24px); max-width: none; border-radius: 20px; align-self: center; }
   .logo { margin-bottom: 2px; }
   .logo-icon { font-size: 32px; }
   .logo h1 { font-size: 20px; margin-top: 4px; }
@@ -207,14 +207,17 @@
   .results-avg { font-size: 12px; }
 
   /* ── Modals: bottom sheet ── */
-  .modal-backdrop { align-items: flex-end; }
+  .modal-backdrop {
+    align-items: flex-end;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
   .modal-box {
     min-width: 0;
     width: 100%;
     border-radius: 20px 20px 0 0;
-    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+    padding: 20px 16px 24px;
     animation: modalInMobile 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    max-height: 88svh;
+    max-height: 80svh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -229,6 +232,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
+    flex-shrink: 0;
     padding: 10px 16px;
     background: rgba(255, 255, 255, 0.88);
     backdrop-filter: blur(12px);

@@ -1,5 +1,8 @@
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
+/* Mobile header: hidden by default, shown only on mobile */
+.mobile-header { display: none; }
+
 /* Tablet / zoomed-in desktop (≤ 1024px wide) */
 @media (max-width: 1024px) {
   .game-header { padding: 8px 14px; gap: 8px; }
@@ -212,10 +215,51 @@
     border-radius: 20px 20px 0 0;
     padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
     animation: modalInMobile 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    max-height: 92svh;
+    overflow-y: auto;
   }
   @keyframes modalInMobile {
     from { opacity: 0; transform: translateY(32px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   .jira-modal-box { max-width: none; max-height: 85svh; overflow-y: auto; }
+
+  /* ── Mobile sticky header ── */
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(8, 17, 46, 0.08);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .mobile-header-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mobile-header-favicon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+  }
+  .mobile-header-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .mobile-auth-btns {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Hide the original floating auth bar on mobile */
+  .auth-bar { display: none !important; }
 }

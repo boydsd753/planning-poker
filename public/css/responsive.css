@@ -66,20 +66,22 @@
 /* ── Mobile (≤ 640px) ────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
 
-  /* Fix iOS Safari viewport: svh excludes browser chrome */
-  .screen { height: 100svh; }
+  /* Body becomes a flex column so the sticky header sits above screens
+     without stealing height from them. Each .screen fills the remainder. */
+  body { display: flex; flex-direction: column; }
+  .screen { flex: 1; height: auto; min-height: 0; overflow: hidden; }
 
-  /* Landing — scrollable so all content (incl. privacy link) is reachable */
+  /* Landing: allow vertical scroll so all content (incl. privacy link) is reachable */
   #screen-landing {
-    height: 100svh;
-    align-items: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    align-items: center;
     flex-direction: column;
     padding: 0 0 32px;
-    overflow-y: auto;
   }
 
   /* Landing box: full width */
-  .landing-box { padding: 18px 16px; gap: 10px; margin: 10px 12px 0; width: calc(100% - 24px); max-width: none; border-radius: 20px; align-self: center; }
+  .landing-box { padding: 18px 16px; gap: 10px; margin: 10px 12px 0; width: calc(100% - 24px); max-width: none; border-radius: 20px; }
   .logo { margin-bottom: 2px; }
   .logo-icon { font-size: 32px; }
   .logo h1 { font-size: 20px; margin-top: 4px; }
@@ -217,7 +219,7 @@
     border-radius: 20px 20px 0 0;
     padding: 20px 16px 24px;
     animation: modalInMobile 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    max-height: 80svh;
+    max-height: 90svh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -227,20 +229,16 @@
   }
   .jira-modal-box { max-width: none; max-height: 85svh; overflow-y: auto; }
 
-  /* ── Mobile sticky header ── */
+  /* ── Mobile header — sits above screens as a normal flex child of body ── */
   .mobile-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    width: 100%;
     flex-shrink: 0;
+    width: 100%;
     padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(8, 17, 46, 0.08);
-    position: sticky;
-    top: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
     z-index: 50;
   }
   .mobile-header-logo {

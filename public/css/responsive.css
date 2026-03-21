@@ -69,10 +69,13 @@
   /* Fix iOS Safari viewport: svh excludes browser chrome */
   .screen { height: 100svh; }
 
-  /* Landing — align to top so content isn't clipped when taller than viewport */
+  /* Landing — scrollable so all content (incl. privacy link) is reachable */
   #screen-landing {
+    height: auto;
+    min-height: 100svh;
     align-items: flex-start;
-    padding: 0 0 20px;
+    padding: 0 0 32px;
+    overflow-y: visible;
   }
 
   /* Landing box: full width */
@@ -204,15 +207,16 @@
   .results-avg { font-size: 12px; }
 
   /* ── Modals: bottom sheet ── */
-  .modal-backdrop { align-items: flex-end; padding-bottom: env(safe-area-inset-bottom); }
+  .modal-backdrop { align-items: flex-end; }
   .modal-box {
     min-width: 0;
     width: 100%;
     border-radius: 20px 20px 0 0;
-    padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
     animation: modalInMobile 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    max-height: 92svh;
+    max-height: 88svh;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   @keyframes modalInMobile {
     from { opacity: 0; transform: translateY(32px); }

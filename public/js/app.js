@@ -2825,15 +2825,32 @@ function updateAuthBar(user) {
     // Pre-fill name input on landing
     const inp = document.getElementById('inp-name');
     if (inp && !inp.value) inp.value = name.slice(0, 20);
+    // Sync mobile header
+    document.getElementById('mobile-auth-guest')?.classList.add('hidden');
+    document.getElementById('mobile-auth-user')?.classList.remove('hidden');
+    const mobileName = document.getElementById('mobile-auth-bar-name');
+    if (mobileName) mobileName.textContent = name;
   } else {
     authBarGuest?.classList.remove('hidden');
     authBarUser?.classList.add('hidden');
+    // Sync mobile header
+    document.getElementById('mobile-auth-guest')?.classList.remove('hidden');
+    document.getElementById('mobile-auth-user')?.classList.add('hidden');
   }
 }
 
 document.getElementById('btn-open-signin')?.addEventListener('click', () => Auth.openAuthModal('signin'));
 document.getElementById('btn-open-signup')?.addEventListener('click', () => Auth.openAuthModal('signup'));
 document.getElementById('btn-signout')?.addEventListener('click', async () => {
+  document.getElementById('auth-loading-overlay')?.classList.remove('hidden');
+  await Auth.signOut();
+  document.getElementById('auth-loading-overlay')?.classList.add('hidden');
+  showToast('Signed out', 'leave');
+});
+
+document.getElementById('mobile-btn-open-signin')?.addEventListener('click', () => Auth.openAuthModal('signin'));
+document.getElementById('mobile-btn-open-signup')?.addEventListener('click', () => Auth.openAuthModal('signup'));
+document.getElementById('mobile-btn-signout')?.addEventListener('click', async () => {
   document.getElementById('auth-loading-overlay')?.classList.remove('hidden');
   await Auth.signOut();
   document.getElementById('auth-loading-overlay')?.classList.add('hidden');

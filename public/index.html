@@ -28,24 +28,24 @@
 </head>
 <body>
 
-  <!-- ── Mobile sticky header (hidden on desktop) ─────────────────────────── -->
-  <header class="mobile-header" id="mobile-header">
-    <div class="mobile-header-logo">
-      <img src="favicon.svg" alt="Planning Poker Pro" class="mobile-header-favicon">
-      <span class="mobile-header-title">Planning Poker Pro</span>
-    </div>
-    <div id="mobile-auth-guest" class="mobile-auth-btns">
-      <button class="btn-auth-bar" id="mobile-btn-open-signin">Sign In</button>
-      <button class="btn-auth-bar btn-auth-bar--primary" id="mobile-btn-open-signup">Sign Up</button>
-    </div>
-    <div id="mobile-auth-user" class="mobile-auth-btns hidden">
-      <span class="auth-bar-name" id="mobile-auth-bar-name"></span>
-      <button class="btn-auth-bar" id="mobile-btn-signout">Sign Out</button>
-    </div>
-  </header>
-
   <!-- ── Landing ──────────────────────────────────────────────────────────── -->
   <div id="screen-landing" class="screen active">
+
+    <!-- Mobile sticky header (hidden on desktop, inside scroll container) -->
+    <header class="mobile-header" id="mobile-header">
+      <div class="mobile-header-logo">
+        <img src="favicon.svg" alt="Planning Poker Pro" class="mobile-header-favicon">
+        <span class="mobile-header-title">Planning Poker Pro</span>
+      </div>
+      <div id="mobile-auth-guest" class="mobile-auth-btns">
+        <button class="btn-auth-bar" id="mobile-btn-open-signin">Sign In</button>
+        <button class="btn-auth-bar btn-auth-bar--primary" id="mobile-btn-open-signup">Sign Up</button>
+      </div>
+      <div id="mobile-auth-user" class="mobile-auth-btns hidden">
+        <span class="auth-bar-name" id="mobile-auth-bar-name"></span>
+        <button class="btn-auth-bar" id="mobile-btn-signout">Sign Out</button>
+      </div>
+    </header>
 
     <!-- Auth bar top right -->
     <div class="auth-bar" id="auth-bar">

@@ -301,7 +301,7 @@ module.exports = function registerHandlers(io) {
     });
 
     // ── Reactions ──────────────────────────────────────────────────────────────
-    const ALLOWED_REACTIONS = new Set(['👍','👎','❤️','😂','😮','🤔','☕','🎉','sergio','danan','parrot','party_blob','elmo_money','this_is_fine','spongebob','smart','rage','success']);
+    const ALLOWED_REACTIONS = new Set(['👍','👎','❤️','😂','😮','🤔','☕','🎉','sergio','danan','parrot','party_blob','elmo_money','this_is_fine','spongebob','smart','rage','success','poop','rage_poop','poop_fire','poop_sob','sad_poop']);
     socket.on('react', ({ emoji }) => {
       if (!ALLOWED_REACTIONS.has(emoji)) return;
       if (!socket.roomCode) return;

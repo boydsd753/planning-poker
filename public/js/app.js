@@ -775,6 +775,11 @@ const CUSTOM_THROW_IMGS = {
   smart:        'images/smart.gif',
   rage:         'images/rage.jpg',
   success:      'images/success.png',
+  poop:         'images/poop.gif',
+  rage_poop:    'images/rage-poop.png',
+  poop_fire:    'images/poopfire.gif',
+  poop_sob:     'images/poopsob.png',
+  sad_poop:     'images/sad_poop.png',
 };
 
 function animateThrow(emoji, fromX, fromY, toX, toY) {
@@ -845,6 +850,11 @@ socket.on('reaction', ({ playerId, emoji }) => {
     smart:       'images/smart.gif',
     rage:        'images/rage.jpg',
     success:     'images/success.png',
+    poop:        'images/poop.gif',
+    rage_poop:   'images/rage-poop.png',
+    poop_fire:   'images/poopfire.gif',
+    poop_sob:    'images/poopsob.png',
+    sad_poop:    'images/sad_poop.png',
   };
   if (CUSTOM_REACTION_IMGS[emoji]) {
     const img = document.createElement('img');

@@ -2841,10 +2841,10 @@ function updateAuthBar(user) {
     const mobileName = document.getElementById('mobile-auth-bar-name');
     if (mobileName) mobileName.textContent = name;
   } else {
-    authBarGuest?.classList.remove('hidden');
+    authBarGuest?.classList.add('hidden');
     authBarUser?.classList.add('hidden');
     // Sync mobile header
-    document.getElementById('mobile-auth-guest')?.classList.remove('hidden');
+    document.getElementById('mobile-auth-guest')?.classList.add('hidden');
     document.getElementById('mobile-auth-user')?.classList.add('hidden');
   }
 }

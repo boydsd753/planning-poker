@@ -398,7 +398,7 @@ module.exports = function registerHandlers(io) {
       const room = rooms[roomCode];
       const token = socket.sessionToken;
 
-      // Give the client 15 seconds to rejoin before removing them
+      // Give the client 10 minutes to rejoin before removing them
       const timer = setTimeout(() => {
         if (!rooms[roomCode]) return;
         const wasAdmin = room.players[socket.id]?.isAdmin;
@@ -413,12 +413,12 @@ module.exports = function registerHandlers(io) {
         if (wasAdmin) remaining[0].isAdmin = true;
         io.to(roomCode).emit('room-update', room);
         console.log(`[disconnect] ${socket.id} removed from ${roomCode} (grace expired)`);
-      }, 90000);
+      }, 7200000); // 2 hours
 
       if (token && sessions[token]) {
         sessions[token].disconnectTimer = timer;
       }
-      console.log(`[disconnect] ${socket.id} left ${roomCode} — 90s grace started`);
+      console.log(`[disconnect] ${socket.id} left ${roomCode} — 2h grace started`);
     });
   });
 

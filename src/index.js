@@ -9,8 +9,8 @@ const path    = require('path');
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, {
-  pingInterval: 25000,  // how often to ping (ms)
-  pingTimeout:  60000,  // how long to wait for pong before disconnecting (ms)
+  pingInterval: 20000,   // ping every 20s — keeps connection alive through proxies
+  pingTimeout:  300000,  // wait 5 min for pong — tolerates aggressively throttled background tabs
 });
 
 const securityHeaders  = require('./middleware/security');

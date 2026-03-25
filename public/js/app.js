@@ -327,6 +327,18 @@ function getSettings() {
 
 // Socket
 const socket = io();
+
+// Auto-rejoin when socket reconnects mid-session (e.g. Render proxy drop, tab wake)
+socket.on('connect', () => {
+  if (!myRoom) return; // not in a room yet — nothing to rejoin
+  const raw = sessionStorage.getItem('pp_session');
+  if (!raw) return;
+  try {
+    const { sessionToken } = JSON.parse(raw);
+    if (sessionToken) socket.emit('rejoin-room', { sessionToken });
+  } catch (_) {}
+});
+
 socket.on('room-joined', ({ roomCode, sessionToken }) => {
   myRoom = roomCode;
   roomCodeDisplay.textContent = roomCode;

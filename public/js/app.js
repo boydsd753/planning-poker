@@ -1477,7 +1477,7 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
   gameNameDisplay.textContent = s.gameName || '';
 
   btnTransferHost.classList.toggle('hidden', !isAdmin);
-  updateJiraButton(isAdmin);
+  updateJiraButton();
   applyDealerVisibility(room.dealersHidden || false);
 
   if (canAct) {
@@ -2247,7 +2247,7 @@ socket.on('jira-tokens-updated', (tokenData) => {
 // Refresh token expired — clear stale session and update UI
 socket.on('jira-session-invalid', () => {
   clearJiraSession();
-  updateJiraButton(true);
+  updateJiraButton();
   showToast('Jira session expired — please re-link Jira', 'leave');
 });
 
@@ -2256,23 +2256,18 @@ function jiraHeaders() {
 }
 
 
-function updateJiraButton(isAdmin) {
+function updateJiraButton() {
   const label = jiraSession ? `Jira: ${jiraDomain}` : 'Link Jira';
-  // Sidebar Jira button visible to admins only (linking requires host)
-  if (isAdmin) {
-    btnLinkJiraMobile.classList.remove('hidden');
-    btnLinkJiraMobile.textContent = label;
-    btnLinkJiraMobile.classList.toggle('jira-linked', !!jiraSession);
-  } else {
-    btnLinkJiraMobile.classList.add('hidden');
-  }
+  btnLinkJiraMobile.classList.remove('hidden');
+  btnLinkJiraMobile.textContent = label;
+  btnLinkJiraMobile.classList.toggle('jira-linked', !!jiraSession);
 }
 
 btnLinkJira.addEventListener('click', () => {
   if (jiraSession) {
     // Already linked — click to unlink
     clearJiraSession();
-    updateJiraButton(true);
+    updateJiraButton();
     showToast('Jira unlinked', 'info');
     return;
   }
@@ -2292,7 +2287,7 @@ btnLinkJira.addEventListener('click', () => {
         Auth.saveJiraConnection(jiraSession, td.accessToken, td.refreshToken, td.expiresAt, td.cloudId, td.domain);
       }
       if (myRoom) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
-      updateJiraButton(true);
+      updateJiraButton();
       showToast(`Jira linked: ${escHtml(jiraDomain)}`, 'join');
       if (btnLinkJira._openImportAfterAuth) {
         btnLinkJira._openImportAfterAuth = false;
@@ -2490,7 +2485,7 @@ async function jiraGet(url) {
   const data = await res.json();
   if (res.status === 401) {
     clearJiraSession();
-    updateJiraButton(true);
+    updateJiraButton();
     throw new Error('Jira session expired — please re-link Jira.');
   }
   if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
@@ -2506,7 +2501,7 @@ async function jiraPost(url, body) {
   const data = await res.json();
   if (res.status === 401) {
     clearJiraSession();
-    updateJiraButton(true);
+    updateJiraButton();
     throw new Error('Jira session expired — please re-link Jira.');
   }
   if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
@@ -2899,7 +2894,7 @@ Auth.onAuthStateChange(async (user, event) => {
         localStorage.setItem('jiraDomain',  jiraDomain);
         saveJiraTokenData({ accessToken: conn.accessToken, refreshToken: conn.refreshToken, expiresAt: conn.expiresAt, cloudId: conn.cloudId, domain: conn.domain });
         if (myRoom) socket.emit('link-jira-session', { jiraSessionId: jiraSession });
-        updateJiraButton(true);
+        updateJiraButton();
       }
     }
   }

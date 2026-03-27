@@ -945,6 +945,7 @@ function onResize() {
 window.addEventListener('resize', onResize);
 if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 
+
 // Countdown
 function doCountdown(callback) {
   let count = 3;
@@ -1503,10 +1504,22 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
     voteTally.textContent = parts.join(' · ');
   }
 
-  sizeTables();
-
   const devPlayers = players.filter(p => p.role === 'dev');
   const qaPlayers  = players.filter(p => p.role === 'qa');
+
+  // Swap panel first so sizeTables() and renderTeamPlayers() both measure the
+  // correct (post-swap) area height — eliminates the one-frame position jump.
+  if (room.revealed) {
+    pickerPanel.classList.add('hidden');
+    resultsPanel.classList.remove('hidden');
+    renderResults(players, s, room);
+  } else {
+    pickerPanel.classList.remove('hidden');
+    resultsPanel.classList.add('hidden');
+    if (!me?.isSpectator) renderCardPicker(room.revealed, me, s.deck || 'fibonacci');
+  }
+
+  sizeTables();
 
   // prevVotedIds already holds the previous round's voted set — renderTeamPlayers
   // compares incoming players against it to detect new votes, then we update it.
@@ -1517,7 +1530,7 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
   renderTeamPlayers(devPlayers, room.revealed, animateFlip, 'dev', oldPlayerIds);
   renderTeamPlayers(qaPlayers,  room.revealed, animateFlip, 'qa',  oldPlayerIds);
   renderSpectators(players.filter(p => p.isSpectator));
-  prevVotedIds = incomingVotedIds; // update after render so next call can diff
+  prevVotedIds = incomingVotedIds;
 
   // Mirror top votes onto the active issue BEFORE renderIssues so the issue list shows them
   if (room.revealed && room.activeIssueId) {
@@ -1546,17 +1559,6 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
       });
     });
   }
-
-  // Picker vs results
-  if (room.revealed) {
-    pickerPanel.classList.add('hidden');
-    resultsPanel.classList.remove('hidden');
-    renderResults(players, s, room);
-  } else {
-    pickerPanel.classList.remove('hidden');
-    resultsPanel.classList.add('hidden');
-    if (!me?.isSpectator) renderCardPicker(room.revealed, me, s.deck || 'fibonacci');
-  }
 }
 
 function sizeTables() {
@@ -1573,8 +1575,8 @@ function sizeTables() {
       tw = Math.min(aw * 0.38, 210);
       th = Math.min(ah * 0.60, 320);
     } else {
-      tw = Math.min(aw * 0.58, 380);
-      th = Math.min(ah * 0.90, 700);
+      tw = Math.min(aw * 0.40, 260);
+      th = Math.min(ah * 0.68, 480);
     }
     table.style.width  = `${tw}px`;
     table.style.height = `${th}px`;
@@ -2257,7 +2259,9 @@ function jiraHeaders() {
 
 
 function updateJiraButton() {
-  const label = jiraSession ? `Jira: ${jiraDomain}` : 'Link Jira';
+  // Show just the subdomain (e.g. "mycompany" from "mycompany.atlassian.net")
+  const shortDomain = jiraDomain ? jiraDomain.split('.')[0] : '';
+  const label = jiraSession ? `Jira: ${shortDomain}` : 'Link Jira';
   btnLinkJiraMobile.classList.remove('hidden');
   btnLinkJiraMobile.textContent = label;
   btnLinkJiraMobile.classList.toggle('jira-linked', !!jiraSession);

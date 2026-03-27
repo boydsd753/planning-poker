@@ -152,7 +152,7 @@
   flex-shrink: 0;
 }
 .sidebar-title { font-size: 14px; font-weight: 600; color: var(--primary); }
-.sidebar-jira-btn { font-size: 11px; padding: 4px 8px; }
+.sidebar-jira-btn { font-size: 11px; padding: 4px 8px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .btn-icon {
   background: transparent; border: none; color: var(--muted);

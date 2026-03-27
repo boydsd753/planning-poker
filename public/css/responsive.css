@@ -3,6 +3,117 @@
 /* Mobile header: hidden by default, shown only on mobile */
 .mobile-header { display: none; }
 
+/* ── Standard desktop / 1080p laptops (≥ 820px tall, ≥ 1024px wide) ─────── */
+/* Compact everything — tables sized in JS; CSS handles the rest              */
+@media (min-height: 820px) and (min-width: 1024px) {
+
+  /* ── Landing / home screen ── */
+  .landing-box  { padding: 24px 28px; gap: 12px; max-width: 680px; }
+  .logo-icon    { font-size: 36px; }
+  .logo h1      { font-size: 21px; margin-top: 5px; }
+  .logo p       { font-size: 13px; }
+  .toggle-label { font-size: 13px; }
+  .toggle-hint  { font-size: 11px; }
+  .btn-primary  { padding: 10px; font-size: 14px; }
+  input[type=text], input[type=email], input[type=password] { padding: 9px 12px; font-size: 13px; }
+  .seg-btn      { padding: 6px 10px; font-size: 13px; }
+  .tab-btn      { padding: 6px; font-size: 13px; }
+  .csel-trigger { padding: 8px 12px; font-size: 13px; }
+
+  /* Two-column create form */
+  .create-cols     { flex-direction: row; align-items: flex-start; gap: 20px; }
+  .create-col-left { flex: 1; gap: 12px; }
+  .create-col-right {
+    flex: 1; gap: 8px;
+    padding: 14px;
+    background: rgba(8,17,46,0.03);
+    border: 1px solid rgba(8,17,46,0.07);
+    border-radius: 12px;
+  }
+
+  /* ── Game header ── */
+  .game-header       { padding: 6px 14px; gap: 8px; }
+  .game-name-display { font-size: 13px; }
+  .room-label        { font-size: 10px; }
+  .room-label strong { font-size: 11px; }
+  .btn-ghost         { padding: 5px 10px; font-size: 12px; }
+  .btn-reveal        { padding: 6px 16px; font-size: 13px; border-radius: 10px; }
+  .btn-new-round     { padding: 6px 16px; font-size: 13px; border-radius: 10px; }
+  .btn-leave         { padding: 4px 9px; font-size: 11px; }
+  .timer-wrap        { padding: 3px 8px; border-radius: 10px; }
+  .timer-display     { font-size: 13px; min-width: 38px; }
+  .vote-tally        { font-size: 12px; }
+
+  /* ── Player seats ── */
+  .player-seat       { min-width: 58px; gap: 3px; }
+  .player-card-wrap  { width: 40px; height: 57px; }
+  .player-avatar     { width: 30px; height: 30px; font-size: 11px; border-width: 1px; }
+  .player-name       { font-size: 11px; padding: 2px 7px; }
+  .card-front .cv-center { font-size: 14px; }
+  .card-back::after      { width: 14px; height: 14px; }
+  .card-empty            { font-size: 11px; }
+
+  /* ── Card picker ── */
+  .picker-area { padding: 8px 16px 10px; }
+  #picker-panel { gap: 5px; }
+  .picker-label { font-size: 10px; }
+  .cards-row   { gap: 7px; padding-top: 10px; padding-bottom: 4px; }
+  .pick-card   { width: 44px; height: 62px; font-size: 15px; border-radius: 11px; }
+  .pick-card:hover:not(:disabled) { transform: translateY(-10px); }
+  .pick-card.selected             { transform: translateY(-12px); }
+
+  /* ── Table center content (lonely, waiting, ticket pill, revealed stats) ── */
+  .table-center-content { font-size: 11px; padding: 8px; max-width: 160px; }
+  .table-issue-pill     { padding: 7px 10px; border-radius: 11px; gap: 3px; }
+  .table-issue-label    { font-size: 8px; }
+  .table-issue-title    { font-size: 10px; max-width: 120px; }
+  .table-issue-status   { font-size: 9px; }
+  .table-waiting        { padding: 4px 12px; font-size: 11px; }
+  .table-lonely         { padding: 10px 14px; gap: 5px; border-radius: 12px; }
+  .table-lonely-text    { font-size: 11px; }
+  .table-lonely-hint    { font-size: 10px; }
+  .stats-wrap           { padding: 8px 12px; border-radius: 12px; }
+  .stat-avg             { font-size: 20px; }
+  .stat-consensus       { font-size: 12px; }
+  .stat-label           { font-size: 8px; }
+  .stat-range           { font-size: 10px; }
+
+  /* ── Results panel (revealed cards) ── */
+  .results-teams       { gap: 12px; }
+  .results-team-header { font-size: 10px; }
+  .results-avg         { font-size: 13px; }
+  .results-range       { font-size: 12px; }
+  .results-consensus   { font-size: 13px; }
+  .results-stats       { gap: 10px; }
+  .vote-card-mini      { width: 32px; height: 46px; font-size: 12px; border-radius: 8px; }
+  .vote-bar-wrap       { width: 32px; height: 42px; }
+  .vote-bar-bg         { width: 10px; }
+  .vote-names          { font-size: 9px; max-width: 44px; }
+  .results-votes       { gap: 4px; }
+  .btn-save-estimate   { padding: 5px 12px; font-size: 12px; }
+
+  /* ── Sidebar (issues panel) ── */
+  .issues-sidebar.open      { width: 240px; }
+  .sidebar-tab.sidebar-open { right: 240px; }
+  .sidebar-header   { padding: 10px 12px 8px; }
+  .sidebar-title    { font-size: 13px; }
+  .sidebar-jira-btn { font-size: 11px; }
+  .issue-item       { padding: 6px 12px; gap: 6px; }
+  .issue-title      { font-size: 12px; }
+  .issue-view-btn   { font-size: 10px; }
+  .issue-estimate   { font-size: 10px; padding: 1px 5px; }
+  .issue-delete     { font-size: 12px; }
+  .add-issue-row    { padding: 8px 10px; gap: 5px; }
+  .issue-input      { padding: 5px 8px; font-size: 12px; }
+  .btn-add-issue    { width: 28px; height: 28px; }
+
+  /* ── Modals ── */
+  .modal-box   { padding: 18px; border-radius: 16px; gap: 12px; }
+  .modal-title { font-size: 14px; }
+  .modal-hint  { font-size: 12px; }
+  .transfer-item { padding: 8px 12px; font-size: 13px; }
+}
+
 /* Tablet / zoomed-in desktop (≤ 1024px wide) */
 @media (max-width: 1024px) {
   .game-header { padding: 8px 14px; gap: 8px; }

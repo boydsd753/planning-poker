@@ -135,6 +135,11 @@ input[type=password]:focus,
 .tab-panel        { display: none; flex-direction: column; gap: 14px; }
 .tab-panel.active { display: flex; }
 
+/* ── Create tab two-column layout (stacks on mobile) ── */
+.create-cols      { display: flex; flex-direction: column; gap: 14px; }
+.create-col-left  { display: flex; flex-direction: column; gap: 14px; }
+.create-col-right { display: flex; flex-direction: column; gap: 10px; }
+
 .btn-primary {
   width: 100%; padding: 12px;
   background: #3448ff;

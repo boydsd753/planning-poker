@@ -99,9 +99,12 @@ module.exports = function registerHandlers(io) {
       // Cancel pending disconnect removal if any
       if (session.disconnectTimer) { clearTimeout(session.disconnectTimer); session.disconnectTimer = null; }
 
-      // Remove old socket slot, reassign under new socket.id
+      // Remove ALL slots for this player (guards against duplicates from edge-case double-rejoin)
+      Object.keys(room.players).forEach(id => {
+        if (room.players[id] === playerData) delete room.players[id];
+      });
       const oldId = playerData.id;
-      delete room.players[oldId];
+      if (room.players[oldId]) delete room.players[oldId];
       playerData.id = socket.id;
       room.players[socket.id] = playerData;
       session.playerData = playerData;
@@ -110,7 +113,8 @@ module.exports = function registerHandlers(io) {
       socket.join(roomCode);
       socket.roomCode = roomCode;
       socket.emit('room-joined', { roomCode, sessionToken });
-      io.to(roomCode).emit('room-update', room);
+      // Pass oldId+newId so clients can suppress the spurious "left"/"joined" toasts
+      io.to(roomCode).emit('room-update', room, { _silentRejoin: { oldId, newId: socket.id } });
       console.log(`[rejoin]     ${socket.id} rejoined ${roomCode} (was ${oldId})`);
     });
 
@@ -301,7 +305,7 @@ module.exports = function registerHandlers(io) {
     });
 
     // ── Reactions ──────────────────────────────────────────────────────────────
-    const ALLOWED_REACTIONS = new Set(['👍','👎','❤️','😂','😮','🤔','☕','🎉','sergio','danan','parrot','party_blob','elmo_money','this_is_fine','spongebob','smart','rage','success','poop','rage_poop','poop_fire','poop_sob','sad_poop']);
+    const ALLOWED_REACTIONS = new Set(['👍','👎','❤️','😂','😮','🤔','☕','🎉','sergio','danan','parrot','party_blob','elmo_money','this_is_fine','spongebob','smart','rage','success','poop','rage_poop','poop_fire','poop_sob','sad_poop','outrage']);
     socket.on('react', ({ emoji }) => {
       if (!ALLOWED_REACTIONS.has(emoji)) return;
       if (!socket.roomCode) return;

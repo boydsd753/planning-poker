@@ -330,7 +330,8 @@ const socket = io();
 
 // Auto-rejoin when socket reconnects mid-session (e.g. Render proxy drop, tab wake)
 socket.on('connect', () => {
-  if (!myRoom) return; // not in a room yet — nothing to rejoin
+  if (!myRoom) return;    // not in a room yet — nothing to rejoin
+  if (rejoining) return;  // tryRejoin() is already handling this connect
   const raw = sessionStorage.getItem('pp_session');
   if (!raw) return;
   try {
@@ -352,7 +353,9 @@ socket.on('room-joined', ({ roomCode, sessionToken }) => {
   window.history.replaceState({}, '', url.toString());
 });
 
-socket.on('room-update', (room) => {
+socket.on('room-update', (room, meta) => {
+  const silentOldId = meta?._silentRejoin?.oldId;
+  const silentNewId = meta?._silentRejoin?.newId;
   const justRevealed = room.revealed && !wasRevealed;
   wasRevealed = room.revealed;
 
@@ -360,14 +363,14 @@ socket.on('room-update', (room) => {
   if (me?.isAdmin && !wasAdmin && currentRoom) showToast(`You are now the host ${ICON_STAR}`, 'host');
   wasAdmin = me?.isAdmin || false;
 
-  // Toast notifications for join/leave
+  // Toast notifications for join/leave — skip silent reconnects
   const newIds = Object.keys(room.players);
   if (currentRoom) {
     const oldIds = prevPlayerIds;
-    newIds.filter(id => !oldIds.includes(id) && id !== myId).forEach(id => {
+    newIds.filter(id => !oldIds.includes(id) && id !== myId && id !== silentNewId).forEach(id => {
       showToast(`${escHtml(room.players[id]?.name || 'Someone')} joined`, 'join');
     });
-    oldIds.filter(id => !newIds.includes(id)).forEach(id => {
+    oldIds.filter(id => !newIds.includes(id) && id !== silentOldId).forEach(id => {
       const name = currentRoom.players[id]?.name || 'Someone';
       showToast(`${escHtml(name)} left`, 'leave');
     });
@@ -792,6 +795,7 @@ const CUSTOM_THROW_IMGS = {
   poop_fire:    'images/poopfire.gif',
   poop_sob:     'images/poopsob.png',
   sad_poop:     'images/sad_poop.png',
+  outrage:      'images/outrage.png',
 };
 
 function animateThrow(emoji, fromX, fromY, toX, toY) {
@@ -813,10 +817,13 @@ function animateThrow(emoji, fromX, fromY, toX, toY) {
   el.className = 'flying-emoji';
   el.style.cssText = `position:fixed;top:0;left:0;pointer-events:none;z-index:9998;font-size:28px;line-height:1;`;
 
+  const NO_CLIP_IMGS = new Set(['outrage']);
   if (CUSTOM_THROW_IMGS[emoji]) {
     const img = document.createElement('img');
     img.src = CUSTOM_THROW_IMGS[emoji];
-    img.style.cssText = 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
+    img.style.cssText = NO_CLIP_IMGS.has(emoji)
+      ? 'width:56px;height:56px;object-fit:contain;display:block;'
+      : 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
     el.appendChild(img);
   } else {
     el.textContent = emoji;
@@ -867,11 +874,15 @@ socket.on('reaction', ({ playerId, emoji }) => {
     poop_fire:   'images/poopfire.gif',
     poop_sob:    'images/poopsob.png',
     sad_poop:    'images/sad_poop.png',
+    outrage:     'images/outrage.png',
   };
+  const NO_CLIP_REACTION_IMGS = new Set(['outrage']);
   if (CUSTOM_REACTION_IMGS[emoji]) {
     const img = document.createElement('img');
     img.src = CUSTOM_REACTION_IMGS[emoji];
-    img.style.cssText = 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
+    img.style.cssText = NO_CLIP_REACTION_IMGS.has(emoji)
+      ? 'width:56px;height:56px;object-fit:contain;display:block;'
+      : 'width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;';
     el.appendChild(img);
   } else {
     el.textContent = emoji;

@@ -515,6 +515,7 @@
 }
 .react-emoji-btn--img { padding: 1px 2px; }
 .react-emoji-btn--img img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: block; }
+.react-emoji-btn--noclip img { border-radius: 0; object-fit: contain; width: 32px; height: 32px; }
 
 /* Floating reaction — spawned by JS over player seat */
 .floating-reaction {

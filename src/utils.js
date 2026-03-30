@@ -4,7 +4,7 @@ const https = require('https');
 
 const DEFAULT_SETTINGS = {
   gameName:        '',
-  deck:            'fibonacci',
+  deck:            'hours',
   whoCanReveal:    'all',
   autoReveal:      false,
   showAverage:     true,
@@ -27,7 +27,7 @@ function generateId() {
 function sanitizeSettings(raw = {}) {
   return {
     gameName:     String(raw.gameName    ?? DEFAULT_SETTINGS.gameName).trim().slice(0, 60),
-    deck:         ['fibonacci','modified','tshirt','powers2','sequential','custom'].includes(raw.deck)
+    deck:         ['fibonacci','modified','tshirt','powers2','sequential','hours','custom'].includes(raw.deck)
                     ? raw.deck : DEFAULT_SETTINGS.deck,
     customDeck:   raw.deck === 'custom' && Array.isArray(raw.customDeck)
                     ? raw.customDeck.map(v => String(v).trim().slice(0, 10)).filter(Boolean).slice(0, 20)

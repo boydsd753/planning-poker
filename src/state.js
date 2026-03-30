@@ -2,6 +2,7 @@
 
 // Shared in-memory state — imported by routes and socket handlers
 const rooms = {};
+const sessions = {}; // sessionToken → { roomCode, playerData, disconnectTimer }
 const jiraSessions = {}; // sessionId → { accessToken, refreshToken, expiresAt, cloudId, domain }
 
 const stats = {
@@ -16,4 +17,4 @@ const stats = {
   peakPlayers:             0,
 };
 
-module.exports = { rooms, jiraSessions, stats };
+module.exports = { rooms, sessions, jiraSessions, stats };

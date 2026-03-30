@@ -1526,7 +1526,7 @@ function render(room, animateFlip = false, oldPlayerIds = []) {
   if (room.revealed) {
     pickerPanel.classList.add('hidden');
     resultsPanel.classList.remove('hidden');
-    renderResults(players, s, room);
+    renderResults(players, s, room, animateFlip);
   } else {
     pickerPanel.classList.remove('hidden');
     resultsPanel.classList.add('hidden');
@@ -1897,7 +1897,7 @@ function renderTableCenter(teamPlayers, revealed, settings, room, team) {
   attachViewBtn();
 }
 
-function renderResults(players, settings, room) {
+function renderResults(players, settings, room, animate = false) {
   const devPlayers = players.filter(p => p.role === 'dev');
   const qaPlayers  = players.filter(p => p.role === 'qa');
 
@@ -1906,15 +1906,17 @@ function renderResults(players, settings, room) {
 
   resultsContent.innerHTML = `<div class="results-teams"><div class="results-team">${devHtml}</div><div class="results-team">${qaHtml}</div></div>`;
 
-  // Animate bars from 0 → final height
-  requestAnimationFrame(() => {
-    resultsContent.querySelectorAll('.vote-bar-fill').forEach((bar, i) => {
-      const target = bar.style.height;
-      bar.style.height = '0';
-      bar.style.transition = `height 0.55s cubic-bezier(0.4, 0, 0.2, 1) ${i * 60}ms`;
-      requestAnimationFrame(() => { bar.style.height = target; });
+  // Animate bars from 0 → final height only on initial reveal
+  if (animate) {
+    requestAnimationFrame(() => {
+      resultsContent.querySelectorAll('.vote-bar-fill').forEach((bar, i) => {
+        const target = bar.style.height;
+        bar.style.height = '0';
+        bar.style.transition = `height 0.55s cubic-bezier(0.4, 0, 0.2, 1) ${i * 60}ms`;
+        requestAnimationFrame(() => { bar.style.height = target; });
+      });
     });
-  });
+  }
 }
 
 function buildTeamResults(teamPlayers, settings, room, team, label) {
@@ -2268,7 +2270,7 @@ socket.on('jira-session-invalid', () => {
 });
 
 function jiraHeaders() {
-  return { 'Content-Type': 'application/json', 'x-jira-session': jiraSession || '' };
+  return { 'Content-Type': 'application/json', 'x-jira-session': effectiveJiraSession() };
 }
 
 
@@ -2498,8 +2500,12 @@ function addMark(marks, mark) {
   return [...marks, mark];
 }
 
+function effectiveJiraSession() {
+  return jiraSession || currentRoom?.jiraSessionId || '';
+}
+
 async function jiraGet(url) {
-  const res = await fetch(url, { headers: { 'x-jira-session': jiraSession || '' }, cache: 'no-store' });
+  const res = await fetch(url, { headers: { 'x-jira-session': effectiveJiraSession() }, cache: 'no-store' });
   const data = await res.json();
   if (res.status === 401) {
     clearJiraSession();
@@ -2513,7 +2519,7 @@ async function jiraGet(url) {
 async function jiraPost(url, body) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-jira-session': jiraSession || '' },
+    headers: { 'Content-Type': 'application/json', 'x-jira-session': effectiveJiraSession() },
     body: JSON.stringify(body),
   });
   const data = await res.json();
@@ -2586,7 +2592,7 @@ document.querySelectorAll('.jira-scope-btn').forEach(btn => {
 });
 
 btnJiraImport.addEventListener('click', async () => {
-  if (!jiraSession) { btnLinkJira._openImportAfterAuth = true; btnLinkJira.click(); return; }
+  if (!effectiveJiraSession()) { btnLinkJira._openImportAfterAuth = true; btnLinkJira.click(); return; }
   jiraModal.classList.remove('hidden');
 
   // If already loaded, just reopen where we left off

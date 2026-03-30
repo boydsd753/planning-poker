@@ -18,6 +18,7 @@ const authRouter       = require('./routes/auth');
 const { router: jiraRouter } = require('./routes/jira');
 const { router: adminRouter, buildStats, requireAdmin } = require('./routes/admin');
 const registerHandlers = require('./socket/handlers');
+const { loadAll }      = require('./db');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(securityHeaders);
@@ -73,4 +74,7 @@ app.use((req, res) => res.status(404).sendFile(path.join(__dirname, '..', 'publi
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => { console.log(`\n  Planning Poker → http://localhost:${PORT}\n`); });
+server.listen(PORT, async () => {
+  console.log(`\n  Planning Poker → http://localhost:${PORT}\n`);
+  await loadAll();
+});

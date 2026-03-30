@@ -1,18 +1,23 @@
 'use strict';
 
-const { rooms, jiraSessions, stats }         = require('../state');
-const { generateId, sanitizeSettings }       = require('../utils');
-const { generateRoomCode }                   = require('../utils');
-const { estimateIssue }                      = require('../ai');
-const { refreshIfNeeded, sessionSnapshot }   = require('../routes/jira');
-
-// sessionToken → { roomCode, playerData, disconnectTimer }
-const sessions = {};
+const { rooms, sessions, jiraSessions, stats }       = require('../state');
+const { generateId, sanitizeSettings }               = require('../utils');
+const { generateRoomCode }                           = require('../utils');
+const { estimateIssue }                              = require('../ai');
+const { refreshIfNeeded, sessionSnapshot }           = require('../routes/jira');
+const { scheduleSave, saveRoomNow, saveSession, deleteSession, deleteRoom } = require('../db');
 
 module.exports = function registerHandlers(io) {
 
   io.on('connection', (socket) => {
     console.log(`[connect]    ${socket.id}`);
+
+    // Helper: emit room-update AND schedule a DB save
+    function roomUpdate(code, room, meta) {
+      if (meta) io.to(code).emit('room-update', room, meta);
+      else       io.to(code).emit('room-update', room);
+      scheduleSave(code);
+    }
 
     function sanitizeAvatar(raw) {
       if (typeof raw !== 'string') return null;
@@ -55,7 +60,8 @@ module.exports = function registerHandlers(io) {
       socket.join(roomCode);
       socket.roomCode = roomCode;
       socket.emit('room-joined', { roomCode, sessionToken: token });
-      io.to(roomCode).emit('room-update', rooms[roomCode]);
+      roomUpdate(roomCode, rooms[roomCode]);
+      saveRoomNow(roomCode, rooms[roomCode]).then(() => saveSession(token, roomCode, player));
       console.log(`[create]     ${socket.id} created ${roomCode}`);
     });
 
@@ -82,7 +88,8 @@ module.exports = function registerHandlers(io) {
       socket.join(code);
       socket.roomCode = code;
       socket.emit('room-joined', { roomCode: code, sessionToken: token });
-      io.to(code).emit('room-update', room);
+      roomUpdate(code, room);
+      saveRoomNow(code, room).then(() => saveSession(token, code, player));
       const totalNow = Object.values(rooms).reduce((s, r) => s + Object.keys(r.players).length, 0);
       if (totalNow > stats.peakPlayers) stats.peakPlayers = totalNow;
       console.log(`[join]       ${socket.id} joined ${code}${isSpectator ? ' (spectator)' : ''}`);
@@ -94,7 +101,12 @@ module.exports = function registerHandlers(io) {
 
       const { roomCode, playerData } = session;
       const room = rooms[roomCode];
-      if (!room) { delete sessions[sessionToken]; socket.emit('error-msg', 'Room no longer exists.'); return; }
+      if (!room) {
+        delete sessions[sessionToken];
+        deleteSession(sessionToken);
+        socket.emit('error-msg', 'Room no longer exists.');
+        return;
+      }
 
       // Cancel pending disconnect removal if any
       if (session.disconnectTimer) { clearTimeout(session.disconnectTimer); session.disconnectTimer = null; }
@@ -114,7 +126,8 @@ module.exports = function registerHandlers(io) {
       socket.roomCode = roomCode;
       socket.emit('room-joined', { roomCode, sessionToken });
       // Pass oldId+newId so clients can suppress the spurious "left"/"joined" toasts
-      io.to(roomCode).emit('room-update', room, { _silentRejoin: { oldId, newId: socket.id } });
+      roomUpdate(roomCode, room, { _silentRejoin: { oldId, newId: socket.id } });
+      saveSession(sessionToken, roomCode, playerData);
       console.log(`[rejoin]     ${socket.id} rejoined ${roomCode} (was ${oldId})`);
     });
 
@@ -124,7 +137,7 @@ module.exports = function registerHandlers(io) {
       const player = room.players[socket.id];
       if (!player || player.isSpectator) return;
       player.card = player.card === card ? null : card;
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
 
       if (room.settings.autoReveal && !room.revealed) {
         const voters = Object.values(room.players).filter(p => !p.isSpectator);
@@ -133,7 +146,7 @@ module.exports = function registerHandlers(io) {
             const r = rooms[socket.roomCode];
             if (r && !r.revealed) {
               r.revealed = true;
-              io.to(socket.roomCode).emit('room-update', r);
+              roomUpdate(socket.roomCode, r);
               // Per-team AI card majority on auto-reveal
               const activeIssue = r.issues.find(i => i.id === r.activeIssueId);
               if (activeIssue?.jiraKey && r.jiraSessionId) {
@@ -164,7 +177,7 @@ module.exports = function registerHandlers(io) {
       const canReveal = player?.isAdmin || room.settings.whoCanReveal === 'all';
       if (!canReveal) return;
       room.revealed = true;
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
 
       // Per-team AI card majority check
       const activeIssue = room.issues.find(i => i.id === room.activeIssueId);
@@ -195,9 +208,8 @@ module.exports = function registerHandlers(io) {
       stats.roundsCompleted++;
       room.revealed = false;
       Object.values(room.players).forEach(p => { p.card = null; });
-      // Reset timer on new round
       room.timer = { running: false, startedAt: null, elapsed: 0 };
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     // ── Timer ──────────────────────────────────────────────────────────────────
@@ -207,7 +219,7 @@ module.exports = function registerHandlers(io) {
       room.timer.running = true;
       room.timer.startedAt = Date.now();
       room.timer.duration = room.settings.timerDuration || 120;
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     socket.on('timer-pause', () => {
@@ -216,14 +228,14 @@ module.exports = function registerHandlers(io) {
       room.timer.elapsed += Date.now() - room.timer.startedAt;
       room.timer.running = false;
       room.timer.startedAt = null;
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     socket.on('timer-reset', () => {
       const room = rooms[socket.roomCode];
       if (!room) return;
       room.timer = { running: false, startedAt: null, elapsed: 0, duration: room.settings.timerDuration || 120 };
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     // ── Issues ─────────────────────────────────────────────────────────────────
@@ -235,7 +247,7 @@ module.exports = function registerHandlers(io) {
       const issue = { id: generateId(), title: t, jiraKey: jiraKey || null, devEstimate: devEstimate || null, qaEstimate: qaEstimate || null, originalEstimate: originalEstimate || null };
       room.issues.push(issue);
       if (!room.activeIssueId) room.activeIssueId = issue.id;
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     socket.on('delete-issue', ({ id }) => {
@@ -245,7 +257,7 @@ module.exports = function registerHandlers(io) {
       if (room.activeIssueId === id) {
         room.activeIssueId = room.issues[0]?.id || null;
       }
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     socket.on('set-active-issue', ({ id }) => {
@@ -257,7 +269,7 @@ module.exports = function registerHandlers(io) {
         room.revealed = false;
         Object.values(room.players).forEach(p => { p.card = null; });
         room.timer = { running: false, startedAt: null, elapsed: 0 };
-        io.to(socket.roomCode).emit('room-update', room);
+        roomUpdate(socket.roomCode, room);
       }
     });
 
@@ -268,7 +280,7 @@ module.exports = function registerHandlers(io) {
       if (issue && ['dev','qa'].includes(team)) {
         const val = estimate === '' || estimate === null || estimate === undefined ? null : String(estimate).slice(0, 20);
         issue[team === 'dev' ? 'devEstimate' : 'qaEstimate'] = val;
-        io.to(socket.roomCode).emit('room-update', room);
+        roomUpdate(socket.roomCode, room);
       }
     });
 
@@ -278,7 +290,7 @@ module.exports = function registerHandlers(io) {
       const issue = room.issues.find(i => i.id === id);
       if (issue) {
         issue.savedToJira = true;
-        io.to(socket.roomCode).emit('room-update', room);
+        roomUpdate(socket.roomCode, room);
       }
     });
 
@@ -291,7 +303,7 @@ module.exports = function registerHandlers(io) {
       if (!to) return;
       from.isAdmin = false;
       to.isAdmin = true;
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     // ── Toggle dealers (host = all, player = local only via client) ────────────
@@ -301,7 +313,7 @@ module.exports = function registerHandlers(io) {
       const player = room.players[socket.id];
       if (!player?.isAdmin) return;
       room.dealersHidden = !room.dealersHidden;
-      io.to(socket.roomCode).emit('room-update', room);
+      roomUpdate(socket.roomCode, room);
     });
 
     // ── Reactions ──────────────────────────────────────────────────────────────
@@ -386,7 +398,7 @@ module.exports = function registerHandlers(io) {
         stats.aiTokensOutput += result.usage?.output || 0;
         if (result.usage?.rateLimits) stats.aiRateLimits = result.usage.rateLimits;
         io.to(socket.roomCode).emit('ai-estimate-result', result);
-        if (!result.insufficient) io.to(socket.roomCode).emit('room-update', room);
+        if (!result.insufficient) roomUpdate(socket.roomCode, room);
         console.log(`[ai-estimate] ${issueKey} team:${validTeam} insufficient:${!!result.insufficient} → dev:${result.dev}h qa:${result.qa}h`);
       } catch (err) {
         stats.aiEstimatesErrors++;
@@ -402,20 +414,24 @@ module.exports = function registerHandlers(io) {
       const room = rooms[roomCode];
       const token = socket.sessionToken;
 
-      // Give the client 10 minutes to rejoin before removing them
+      // Give the client 2 hours to rejoin before removing them
       const timer = setTimeout(() => {
         if (!rooms[roomCode]) return;
         const wasAdmin = room.players[socket.id]?.isAdmin;
         delete room.players[socket.id];
-        if (token) delete sessions[token];
+        if (token) {
+          delete sessions[token];
+          deleteSession(token);
+        }
         const remaining = Object.values(room.players);
         if (remaining.length === 0) {
           if (room.jiraSessionId) delete jiraSessions[room.jiraSessionId];
           delete rooms[roomCode];
+          deleteRoom(roomCode);
           return;
         }
         if (wasAdmin) remaining[0].isAdmin = true;
-        io.to(roomCode).emit('room-update', room);
+        roomUpdate(roomCode, room);
         console.log(`[disconnect] ${socket.id} removed from ${roomCode} (grace expired)`);
       }, 7200000); // 2 hours
 

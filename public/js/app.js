@@ -947,6 +947,8 @@ function formatMs(ms) {
 
 // Resize — also fires on browser zoom via visualViewport
 function onResize() {
+  const gh = document.querySelector('.game-header');
+  if (gh) document.documentElement.style.setProperty('--game-header-h', gh.offsetHeight + 'px');
   if (currentRoom) {
     const players = Object.values(currentRoom.players);
     sizeTables();

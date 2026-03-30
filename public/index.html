@@ -364,22 +364,6 @@
         <span>Issues</span>
       </button>
 
-      <!-- Issues sidebar -->
-      <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
-      <aside class="issues-sidebar" id="issues-sidebar">
-        <div class="sidebar-header">
-          <span class="sidebar-title">Issues</span>
-          <button id="btn-link-jira-mobile" class="btn-ghost sidebar-jira-btn">Link Jira</button>
-          <button id="btn-sidebar-close" class="btn-icon" title="Close"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
-        </div>
-        <ul class="issue-list" id="issue-list"></ul>
-        <div id="jira-estimate-panel" class="jira-estimate-panel hidden"></div>
-        <div class="add-issue-row">
-          <input id="inp-issue" type="text" placeholder="Add an issue…" maxlength="200" class="issue-input">
-          <button id="btn-add-issue" class="btn-add-issue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
-        </div>
-        <button id="btn-jira-import" class="btn-jira-import">Import from Jira</button>
-      </aside>
     </div>
 
     <!-- Bottom: card picker OR results -->
@@ -563,6 +547,23 @@
   <script src="/js/vendor/mammoth.min.js"></script>
   <script src="/js/vendor/xlsx.full.min.js"></script>
   <script src="/js/vendor/supabase.min.js"></script>
+  <!-- Issues sidebar: lives outside .screen so position:fixed works in iOS Safari -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <aside class="issues-sidebar" id="issues-sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Issues</span>
+      <button id="btn-link-jira-mobile" class="btn-ghost sidebar-jira-btn">Link Jira</button>
+      <button id="btn-sidebar-close" class="btn-icon" title="Close"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
+    </div>
+    <ul class="issue-list" id="issue-list"></ul>
+    <div id="jira-estimate-panel" class="jira-estimate-panel hidden"></div>
+    <div class="add-issue-row">
+      <input id="inp-issue" type="text" placeholder="Add an issue…" maxlength="200" class="issue-input">
+      <button id="btn-add-issue" class="btn-add-issue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
+    </div>
+    <button id="btn-jira-import" class="btn-jira-import">Import from Jira</button>
+  </aside>
+
   <script src="/config.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/auth.js"></script>

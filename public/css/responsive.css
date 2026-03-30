@@ -291,6 +291,18 @@
     border-left: none;
     border-radius: 16px 0 0 16px;
     padding-bottom: env(safe-area-inset-bottom, 16px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .issues-sidebar.open .sidebar-header,
+  .issues-sidebar.open .add-issue-row,
+  .issues-sidebar.open #btn-jira-import {
+    flex-shrink: 0;
+  }
+  .issues-sidebar.open .issue-list {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
   }
   #btn-sidebar-close {

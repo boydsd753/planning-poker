@@ -272,7 +272,7 @@
   .table-lonely-text { font-size: 11px; }
   .table-lonely-hint { font-size: 9px; }
 
-  /* ── Sidebar: right drawer on mobile ── */
+  /* ── Sidebar: mobile drawer tweaks ── */
   .sidebar-jira-btn { display: block !important; }
   .sidebar-backdrop {
     display: none;
@@ -283,17 +283,10 @@
   }
   .sidebar-backdrop.visible { display: block; }
   .issues-sidebar.open {
-    position: fixed;
-    top: 0; right: 0; bottom: 0;
     width: min(85vw, 320px) !important;
-    height: 100%;
     z-index: 50;
-    border-left: none;
     border-radius: 16px 0 0 16px;
     padding-bottom: env(safe-area-inset-bottom, 16px);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
   }
   .issues-sidebar.open .sidebar-header,
   .issues-sidebar.open .add-issue-row,
@@ -307,7 +300,6 @@
   }
   #btn-sidebar-close {
     padding: 8px;
-    font-size: 20px;
   }
   #btn-sidebar-close svg { width: 20px; height: 20px; }
 

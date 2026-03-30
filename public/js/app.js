@@ -387,7 +387,6 @@ socket.on('room-update', (room, meta) => {
     const qaCount    = voters.filter(p => p.role === 'qa').length;
     const flipMs     = (Math.max(devCount, qaCount, 1) - 1) * 140 + 650;
     const countdownMs = room.settings?.countdown ? 3 * 900 : 0;
-    setTimeout(() => toggleSidebar(true), countdownMs + flipMs);
   }
 
   if (justRevealed && room.settings?.countdown) {

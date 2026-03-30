@@ -272,17 +272,32 @@
   .table-lonely-text { font-size: 11px; }
   .table-lonely-hint { font-size: 9px; }
 
-  /* ── Sidebar: full-screen overlay on mobile ── */
+  /* ── Sidebar: right drawer on mobile ── */
   .sidebar-jira-btn { display: block !important; }
-  .issues-sidebar.open {
+  .sidebar-backdrop {
+    display: none;
     position: fixed;
     inset: 0;
-    width: 100% !important;
+    background: rgba(0,0,0,0.4);
+    z-index: 49;
+  }
+  .sidebar-backdrop.visible { display: block; }
+  .issues-sidebar.open {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: min(85vw, 320px) !important;
+    height: 100%;
     z-index: 50;
     border-left: none;
-    border-radius: 0;
+    border-radius: 16px 0 0 16px;
     padding-bottom: env(safe-area-inset-bottom, 16px);
+    overflow-y: auto;
   }
+  #btn-sidebar-close {
+    padding: 8px;
+    font-size: 20px;
+  }
+  #btn-sidebar-close svg { width: 20px; height: 20px; }
 
   /* ── Card picker: very compact ── */
   .picker-area { padding: 4px 10px 4px; }

@@ -168,6 +168,7 @@ const btnNewRound      = $('btn-new-round');
 const chkToggleDealers = $('chk-toggle-dealers');
 const btnIssuesToggle  = $('btn-issues-toggle');
 const btnSidebarClose  = $('btn-sidebar-close');
+const sidebarBackdrop  = $('sidebar-backdrop');
 const btnTimerStart    = $('btn-timer-start');
 const btnTimerPause    = $('btn-timer-pause');
 const btnTimerReset    = $('btn-timer-reset');
@@ -708,10 +709,12 @@ chkToggleDealers.addEventListener('change', () => {
 function toggleSidebar(open) {
   issuesSidebar.classList.toggle('open', open);
   btnIssuesToggle.classList.toggle('sidebar-open', open);
+  sidebarBackdrop.classList.toggle('visible', open);
   setTimeout(() => onResize(), 420); // wait for 0.4s CSS transition to finish
 }
 btnIssuesToggle.addEventListener('click', () => toggleSidebar(!issuesSidebar.classList.contains('open')));
 btnSidebarClose.addEventListener('click', () => toggleSidebar(false));
+sidebarBackdrop.addEventListener('click', () => toggleSidebar(false));
 
 btnAddIssue.addEventListener('click', addIssue);
 inpIssue.addEventListener('keydown', e => { if (e.key === 'Enter') addIssue(); });

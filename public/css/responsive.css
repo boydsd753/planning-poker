@@ -180,7 +180,9 @@
   /* Body becomes a flex column so the sticky header sits above screens
      without stealing height from them. Each .screen fills the remainder. */
   body { display: flex; flex-direction: column; }
-  .screen { flex: 1; height: auto; min-height: 0; overflow: hidden; }
+  /* overflow:clip (not hidden) so position:fixed children aren't trapped in iOS Safari */
+  .screen { flex: 1; height: auto; min-height: 0; overflow: clip; }
+  .game-body { overflow: clip; }
 
   /* Landing: allow vertical scroll so all content (incl. privacy link) is reachable */
   #screen-landing {
@@ -283,6 +285,8 @@
   }
   .sidebar-backdrop.visible { display: block; }
   .issues-sidebar.open {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
     width: min(85vw, 320px) !important;
     z-index: 50;
     border-radius: 16px 0 0 16px;

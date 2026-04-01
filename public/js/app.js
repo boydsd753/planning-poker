@@ -784,6 +784,7 @@ if (tablesContainer) {
 
 const CUSTOM_THROW_IMGS = {
   sergio:       'images/SergioHead.png',
+  sergio2:      'images/SergioHead2.png',
   danan:        'images/DananHead.png',
   parrot:       'images/christmas_parrot.gif',
   party_blob:   'images/party_blob.gif',
@@ -820,7 +821,7 @@ function animateThrow(emoji, fromX, fromY, toX, toY) {
   el.className = 'flying-emoji';
   el.style.cssText = `position:fixed;top:0;left:0;pointer-events:none;z-index:9998;font-size:28px;line-height:1;`;
 
-  const NO_CLIP_IMGS = new Set(['outrage']);
+  const NO_CLIP_IMGS = new Set(['outrage', 'sergio2']);
   if (CUSTOM_THROW_IMGS[emoji]) {
     const img = document.createElement('img');
     img.src = CUSTOM_THROW_IMGS[emoji];
@@ -863,6 +864,7 @@ socket.on('reaction', ({ playerId, emoji }) => {
   el.className = 'floating-reaction';
   const CUSTOM_REACTION_IMGS = {
     sergio:      'images/SergioHead.png',
+    sergio2:     'images/SergioHead2.png',
     danan:       'images/DananHead.png',
     parrot:      'images/christmas_parrot.gif',
     party_blob:  'images/party_blob.gif',
@@ -879,7 +881,7 @@ socket.on('reaction', ({ playerId, emoji }) => {
     sad_poop:    'images/sad_poop.png',
     outrage:     'images/outrage.png',
   };
-  const NO_CLIP_REACTION_IMGS = new Set(['outrage']);
+  const NO_CLIP_REACTION_IMGS = new Set(['outrage', 'sergio2']);
   if (CUSTOM_REACTION_IMGS[emoji]) {
     const img = document.createElement('img');
     img.src = CUSTOM_REACTION_IMGS[emoji];
